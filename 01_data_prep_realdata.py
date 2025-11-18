@@ -181,7 +181,8 @@ def crop_frame_using_box(
 def classify_video(path: Path) -> int | None:
     name = path.stem.lower()
     normalized = name.replace("-", "_")
-    for prefix, class_id in CLASS_PREFIX_TO_ID.items():
+    ordered_prefixes = sorted(CLASS_PREFIX_TO_ID.items(), key=lambda item: len(item[0]), reverse=True)
+    for prefix, class_id in ordered_prefixes:
         if normalized.startswith(prefix):
             return class_id
         compact = prefix.replace("_", "")
