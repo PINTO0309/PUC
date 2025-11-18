@@ -1,8 +1,7 @@
 # PUC
 
 Phone Usage Classifier (PUC) is a four-class image classification pipeline for understanding how people
-interact with smartphones. The `sc` package has been renamed to `puc`, and the core model (`PUC`) now predicts
-the following behaviors from cropped images:
+interact with smartphones.
 
 - `classid=0` (`no_action`): No interaction with a phone.
 - `classid=1` (`call`): Holding the phone to the ear to make or take a call.
@@ -121,3 +120,15 @@ uv run python -m puc train \
   ```bash
   tensorboard --logdir runs/puc
   ```
+
+### ONNX Export
+
+```bash
+uv run python -m puc exportonnx \
+--checkpoint runs/puc_is_s_32x24/puc_best_epoch0049_f1_0.9939.pt \
+--output puc_s.onnx \
+--opset 17
+```
+
+- The saved graph exposes `images` as input and `prob_pointing` as output (batch dimension is dynamic); probabilities can be consumed directly.
+- After exporting, the tool runs `onnxsim` for simplification and rewrites any remaining BatchNormalization nodes into affine `Mul`/`Add` primitives. If simplification fails, a warning is emitted and the unsimplified model is preserved.
