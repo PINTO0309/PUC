@@ -22,7 +22,7 @@ Use `python -m puc.pipeline predict ...`, `webcam`, or `webcam_onnx` to run infe
 
 ```bash
 python 01_data_prep_realdata.py
-python 02_make_parquet.py
+python 02_make_parquet.py --embed-images
 ```
 ```
 Split counts:
