@@ -7,10 +7,12 @@ import argparse
 import csv
 import shutil
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 import onnxruntime as ort
 from PIL import Image
@@ -29,6 +31,7 @@ DEFAULT_DETECTOR_MODEL = ROOT / "deimv2_dinov3_x_wholebody34_680query_n_batch_64
 DETECTOR_INPUT_SIZE = 640
 DETECTOR_BODY_LABEL = 0
 DETECTOR_BODY_THRESHOLD = 0.35
+DEFAULT_CLASS_PIE_FILE = ROOT / "data" / "class_distribution.png"
 CLASS_PREFIX_TO_ID = {
     "no_action": 0,
     "call": 1,
@@ -85,6 +88,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_DETECTOR_MODEL,
         help="ONNX detector used for cropping and filtering (default: deimv2...640.onnx).",
+    )
+    parser.add_argument(
+        "--class-pie-file",
+        type=Path,
+        default=DEFAULT_CLASS_PIE_FILE,
+        help="PNG path for a pie chart summarizing generated class counts.",
     )
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing PNGs if duplicates occur.")
     parser.add_argument("--dry-run", action="store_true", help="Plan operations without writing files.")
@@ -328,6 +337,32 @@ def append_annotations(annotation_file: Path, rows: list[FrameAnnotation]) -> No
     print(f"[annotation] Appended {len(rows)} rows to {annotation_file}.")
 
 
+def save_class_distribution_pie(rows: list[FrameAnnotation], output_path: Path) -> None:
+    counts = Counter(row.class_id for row in rows)
+    if not counts:
+        print("[pie] No annotations available; skipping pie chart.")
+        return
+    labels = []
+    sizes = []
+    for class_id, count in sorted(counts.items()):
+        prefix = next((name for name, cid in CLASS_PREFIX_TO_ID.items() if cid == class_id), str(class_id))
+        labels.append(f"{prefix} ({count})")
+        sizes.append(count)
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.pie(
+        sizes,
+        labels=labels,
+        autopct=lambda pct: f"{pct:.1f}%",
+        startangle=90,
+        counterclock=False,
+    )
+    ax.axis("equal")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[pie] Saved class distribution chart to {output_path}")
+
+
 def main() -> None:
     args = parse_args()
     videos = iter_video_files(args.input_dir)
@@ -360,6 +395,7 @@ def main() -> None:
 
     ensure_backup(args.annotation_file, args.backup_suffix)
     append_annotations(args.annotation_file, all_rows)
+    save_class_distribution_pie(all_rows, args.class_pie_file)
     print(f"[done] Generated {total_kept} frames from {len(videos)} videos.")
 
 
