@@ -18,6 +18,23 @@ python -m puc.pipeline train --data_root /path/to/dataset --output_dir ./outputs
 
 Use `python -m puc.pipeline predict ...`, `webcam`, or `webcam_onnx` to run inference with trained checkpoints.
 
+## Dataset Preparation
+
+```bash
+python 01_data_prep_realdata.py
+python 02_make_parquet.py --embed-images
+```
+```
+Split counts:
+  train: 24994
+    val: 6185
+Label counts:
+         no_action: 7224
+              call: 7695
+             point: 8713
+   point_somewhere: 7547
+```
+
 ## Training Pipeline
 
 - Use the images located under `dataset/output/002_xxxx_front_yyyyyy` together with their annotations in `dataset/output/002_xxxx_front.csv`.
