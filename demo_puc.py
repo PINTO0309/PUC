@@ -61,8 +61,8 @@ EDGES = [
     (31, 32), (31, 32),  # knee -> ankle (left and right)
 ]
 
-BODY_LONG_HISTORY_SIZE = 20
-BODY_SHORT_HISTORY_SIZE = 11
+BODY_LONG_HISTORY_SIZE = 6
+BODY_SHORT_HISTORY_SIZE = 4
 
 class Color(Enum):
     BLACK          = '\033[30m'
