@@ -34,15 +34,15 @@ uv run python 02_make_parquet.py --embed-images
 ```
 ```
 Split counts:
-  train: 49030
-    val: 12231
+  train: 51240
+    val: 12818
 Label counts:
-         no_action: 40112
+         no_action: 42909
              point: 11545
    point_somewhere: 9604
 ```
 
-<img width="679" height="482" alt="class_distribution" src="https://github.com/user-attachments/assets/c5b1d0f0-cb79-4146-99e7-1142c6b24bc3" />
+<img width="673" height="482" alt="class_distribution" src="https://github.com/user-attachments/assets/60d8e828-f2ff-49f2-aa41-6d611e29cb2a" />
 
 ## Training Pipeline
 
