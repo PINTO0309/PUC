@@ -74,6 +74,7 @@ uv run python -m puc train \
 --output_dir runs/puc_${SIZE} \
 --epochs 100 \
 --batch_size 256 \
+--train_resampling balanced \
 --image_size ${SIZE} \
 --base_channels 32 \
 --num_blocks 4 \
