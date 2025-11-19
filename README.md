@@ -3,9 +3,9 @@
 Phone Usage Classifier (PUC) is a three-class image classification pipeline for understanding how people
 interact with smartphones.
 
-- `classid=0` (`no_action`): No interaction with a phone.
-- `classid=1` (`point`): Pointing or tapping directly on the phone.
-- `classid=2` (`point_somewhere`): Pointing/tapping near the phone or gesturing elsewhere.
+- `classid=0` (`no_action`): No interaction with a smartphone.
+- `classid=1` (`point`): Pointing the smartphone towards the camera.
+- `classid=2` (`point_somewhere`): Pointing the smartphone somewhere other than the camera.
 
 The earlier `call` class has been removed from the training pipeline. If you still rely on the legacy four-class
 annotations, run `02_make_parquet.py --annotation-schema legacy ...` to drop those rows and remap the remaining
