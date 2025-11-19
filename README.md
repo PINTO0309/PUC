@@ -1,7 +1,7 @@
 # PUC
 
 Phone Usage Classifier (PUC) is a three-class image classification pipeline for understanding how people
-interact with smartphones.
+interact with smartphones. Perhaps the model is looking at our hands, not our smartphones.
 
 - `classid=0` (`no_action`): No interaction with a smartphone.
 - `classid=1` (`point`): Pointing the smartphone towards the camera.
