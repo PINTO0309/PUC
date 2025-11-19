@@ -7,6 +7,8 @@ interact with smartphones.
 - `classid=1` (`point`): Pointing the smartphone towards the camera.
 - `classid=2` (`point_somewhere`): Pointing the smartphone somewhere other than the camera.
 
+https://github.com/user-attachments/assets/18acf290-63b6-40ba-a38c-a5712dedc19c
+
 ```bash
 uv run python demo_puc.py -v 0 -dlr -dnm -dgm -dhm -ep tensorrt
 ```
