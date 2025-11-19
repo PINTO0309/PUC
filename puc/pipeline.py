@@ -490,7 +490,7 @@ def _build_transforms(image_size: Any, mean: Sequence[float], std: Sequence[floa
             transforms.RandomApply(
                 [
                     transforms.RandomAffine(
-                        degrees=12,
+                        degrees=0,
                         translate=(0.05, 0.05),
                         scale=(0.9, 1.1),
                         fill=0,
