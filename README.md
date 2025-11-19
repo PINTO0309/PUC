@@ -41,15 +41,15 @@ uv run python 02_make_parquet.py --annotation-schema legacy --embed-images
 ```
 ```
 Split counts:
-  train: 49008
-    val: 12253
+  train: 49030
+    val: 12231
 Label counts:
          no_action: 40112
              point: 11545
    point_somewhere: 9604
 ```
 
-<img width="696" height="482" alt="class_distribution" src="https://github.com/user-attachments/assets/61c8df3f-61d8-4bb0-9422-3bbf4aea134d" />
+<img width="679" height="482" alt="class_distribution" src="https://github.com/user-attachments/assets/c5b1d0f0-cb79-4146-99e7-1142c6b24bc3" />
 
 ## Training Pipeline
 
