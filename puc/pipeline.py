@@ -692,14 +692,20 @@ def _save_epoch_diagnostics(
         if 0 <= true_label < num_classes and 0 <= pred_label < num_classes:
             confusion[true_label, pred_label] += 1
 
-    tick_labels = [LABEL_MAP.get(idx, str(idx)) for idx in range(num_classes)]
+    row_activity = confusion.sum(axis=1)
+    col_activity = confusion.sum(axis=0)
+    active_indices = [idx for idx in range(num_classes) if row_activity[idx] > 0 or col_activity[idx] > 0]
+    if not active_indices:
+        active_indices = list(range(num_classes))
+    filtered_confusion = confusion[np.ix_(active_indices, active_indices)]
+    tick_labels = [LABEL_MAP.get(idx, str(idx)) for idx in active_indices]
 
-    cm_fig, cm_ax = plt.subplots(figsize=(max(4, num_classes), 4))
-    cm_im = cm_ax.imshow(confusion, interpolation="nearest", cmap="Blues")
+    cm_fig, cm_ax = plt.subplots(figsize=(max(4, len(active_indices)), 4))
+    cm_im = cm_ax.imshow(filtered_confusion, interpolation="nearest", cmap="Blues")
     cm_ax.figure.colorbar(cm_im, ax=cm_ax, fraction=0.046, pad=0.04)
     cm_ax.set(
-        xticks=list(range(num_classes)),
-        yticks=list(range(num_classes)),
+        xticks=list(range(len(active_indices))),
+        yticks=list(range(len(active_indices))),
         xticklabels=tick_labels,
         yticklabels=tick_labels,
         xlabel="Predicted label",
@@ -710,16 +716,16 @@ def _save_epoch_diagnostics(
         label.set_rotation(25)
         label.set_horizontalalignment("right")
     cm_fig.subplots_adjust(bottom=0.2)
-    thresh = confusion.max() / 2 if confusion.max() > 0 else 0.5
-    for i in range(confusion.shape[0]):
-        for j in range(confusion.shape[1]):
+    thresh = filtered_confusion.max() / 2 if filtered_confusion.max() > 0 else 0.5
+    for i in range(filtered_confusion.shape[0]):
+        for j in range(filtered_confusion.shape[1]):
             cm_ax.text(
                 j,
                 i,
-                f"{confusion[i, j]}",
+                f"{filtered_confusion[i, j]}",
                 ha="center",
                 va="center",
-                color="white" if confusion[i, j] > thresh else "black",
+                color="white" if filtered_confusion[i, j] > thresh else "black",
             )
     cm_fig.tight_layout()
     cm_path = split_dir / f"confusion_{split_name}_epoch{epoch:04d}.png"
