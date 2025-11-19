@@ -40,6 +40,8 @@ Label counts:
    point_somewhere: 9604
 ```
 
+<img width="696" height="482" alt="class_distribution" src="https://github.com/user-attachments/assets/61c8df3f-61d8-4bb0-9422-3bbf4aea134d" />
+
 ## Training Pipeline
 
 - Use the images located under `dataset/output/002_xxxx_front_yyyyyy` together with their annotations in `dataset/output/002_xxxx_front.csv`.
