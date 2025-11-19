@@ -1,4 +1,5 @@
 # PUC
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17625710.svg)](https://doi.org/10.5281/zenodo.17625710) ![GitHub License](https://img.shields.io/github/license/pinto0309/PUC) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/PINTO0309/puc)
 
 Phone Usage Classifier (PUC) is a three-class image classification pipeline for understanding how people
 interact with smartphones. Perhaps the model is looking at our hands, not our smartphones.
