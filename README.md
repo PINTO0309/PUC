@@ -88,9 +88,10 @@ Inverted residual + SE variant (recommended for higher capacity):
 
 ```bash
 SIZE=32x24
+VAR=s
 uv run python -m puc train \
 --data_root data/dataset.parquet \
---output_dir runs/puc_is_s_${SIZE} \
+--output_dir runs/puc_is_${VAR}_${SIZE} \
 --epochs 100 \
 --batch_size 256 \
 --train_resampling balanced \
@@ -102,6 +103,7 @@ uv run python -m puc train \
 --seed 42 \
 --device auto \
 --use_amp
+
 ```
 
 ConvNeXt-style backbone with transformer head over pooled tokens:
