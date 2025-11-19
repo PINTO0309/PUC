@@ -185,21 +185,24 @@ uv run python -m puc exportonnx \
 2. [OCEC: Open closed eyes classification. Ultra-fast wink and blink estimation model](https://github.com/PINTO0309/OCEC) - MIT License
 3. [PGC: Ultrafast pointing gesture classification](https://github.com/PINTO0309/PGC) - MIT License
 4. [SC: Ultrafast sitting classification](https://github.com/PINTO0309/SC) - MIT License
+5. [PUC: Phone Usage Classifier is a three-class image classification pipeline for understanding how people
+interact with smartphones](https://github.com/PINTO0309/PUC) - MIT License
 
 ## Citation
 
 If you find this project useful, please consider citing:
 
 ```bibtex
-@software{hyodo2025sc,
+@software{hyodo2025puc,
   author    = {Katsuya Hyodo},
-  title     = {PINTO0309/SC},
+  title     = {PINTO0309/PUC},
   month     = {11},
   year      = {2025},
   publisher = {Zenodo},
   doi       = {10.5281/zenodo.17625710},
-  url       = {https://github.com/PINTO0309/sc},
-  abstract  = {Ultrafast sitting classification.},
+  url       = {https://github.com/PINTO0309/puc},
+  abstract  = {Phone Usage Classifier (PUC) is a three-class image classification pipeline for understanding how people
+interact with smartphones.},
 }
 ```
 
