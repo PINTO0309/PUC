@@ -7,10 +7,6 @@ interact with smartphones.
 - `classid=1` (`point`): Pointing the smartphone towards the camera.
 - `classid=2` (`point_somewhere`): Pointing the smartphone somewhere other than the camera.
 
-The earlier `call` class has been removed from the training pipeline. If you still rely on the legacy four-class
-annotations, run `02_make_parquet.py --annotation-schema legacy ...` to drop those rows and remap the remaining
-classes to the new IDs.
-
 ```bash
 uv run python demo_puc.py -v 0 -dlr -dnm -dgm -dhm -ep tensorrt
 ```
