@@ -35,9 +35,6 @@ uv run python 01_data_prep_realdata.py \
 --allow-multi-body
 
 uv run python 02_make_parquet.py --embed-images
-
-# Convert legacy annotations (generated before the three-class change) on the fly:
-uv run python 02_make_parquet.py --annotation-schema legacy --embed-images
 ```
 ```
 Split counts:
