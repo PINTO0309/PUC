@@ -8,6 +8,10 @@ interact with smartphones.
 - `classid=2` (`point`): Pointing or tapping directly on the phone.
 - `classid=3` (`point_somewhere`): Pointing/tapping near the phone or gesturing elsewhere.
 
+```bash
+uv run python demo_puc.py -v 0 -dlr -dnm -dgm -dhm -ep tensorrt
+```
+
 Prepare a dataset that contains these four classes (either via the `class_id` column or the `label` text field),
 then run the training pipeline:
 
