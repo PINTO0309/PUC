@@ -176,3 +176,44 @@ uv run python -m puc exportonnx \
 
 - The saved graph exposes `images` as input and `prob_pointing` as output (batch dimension is dynamic); probabilities can be consumed directly.
 - After exporting, the tool runs `onnxsim` for simplification and rewrites any remaining BatchNormalization nodes into affine `Mul`/`Add` primitives. If simplification fails, a warning is emitted and the unsimplified model is preserved.
+
+## Arch
+
+
+## Ultra-lightweight classification model series
+1. [VSDLM: Visual-only speech detection driven by lip movements](https://github.com/PINTO0309/VSDLM) - MIT License
+2. [OCEC: Open closed eyes classification. Ultra-fast wink and blink estimation model](https://github.com/PINTO0309/OCEC) - MIT License
+3. [PGC: Ultrafast pointing gesture classification](https://github.com/PINTO0309/PGC) - MIT License
+4. [SC: Ultrafast sitting classification](https://github.com/PINTO0309/SC) - MIT License
+
+## Citation
+
+If you find this project useful, please consider citing:
+
+```bibtex
+@software{hyodo2025sc,
+  author    = {Katsuya Hyodo},
+  title     = {PINTO0309/SC},
+  month     = {11},
+  year      = {2025},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.17625710},
+  url       = {https://github.com/PINTO0309/sc},
+  abstract  = {Ultrafast sitting classification.},
+}
+```
+
+## Acknowledgements
+- https://github.com/PINTO0309/PINTO_model_zoo/tree/main/472_DEIMv2-Wholebody34: Apache 2.0 License
+  ```bibtex
+  @software{DEIMv2-Wholebody34,
+    author={Katsuya Hyodo},
+    title={Lightweight human detection models generated on high-quality human data sets. It can detect objects with high accuracy and speed in a total of 28 classes: body, adult, child, male, female, body_with_wheelchair, body_with_crutches, head, front, right-front, right-side, right-back, back, left-back, left-side, left-front, face, eye, nose, mouth, ear, collarbone, shoulder, solar_plexus, elbow, wrist, hand, hand_left, hand_right, abdomen, hip_joint, knee, ankle, foot.},
+    url={https://github.com/PINTO0309/PINTO_model_zoo/tree/main/472_DEIMv2-Wholebody34},
+    year={2025},
+    month={10},
+    doi={10.5281/zenodo.17625710}
+  }
+  ```
+- https://github.com/PINTO0309/bbalg: MIT License
+
