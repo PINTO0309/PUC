@@ -806,25 +806,24 @@ def train_pipeline(config: TrainConfig, verbose: bool = False) -> Dict[str, Any]
     train_sampler = None
     if config.train_resampling == "weighted":
         class_counts = Counter(sample.label for sample in train_samples)
-        LOGGER.info(
-            "Training with WeightedRandomSampler (class 0=%d, class 1=%d).",
-            class_counts.get(0, 0),
-            class_counts.get(1, 0),
+        summary = ", ".join(
+            f"class {cls}={class_counts.get(cls, 0)}" for cls in range(NUM_CLASSES)
         )
+        LOGGER.info("Training with WeightedRandomSampler (%s).", summary)
         train_sampler = build_weighted_sampler(train_samples)
     elif config.train_resampling == "balanced":
         before_counts = Counter(sample.label for sample in train_samples)
         train_samples = oversample_samples(train_samples, mode="balanced")
         after_counts = Counter(sample.label for sample in train_samples)
+        class_summaries = ", ".join(
+            f"class {cls}: {before_counts.get(cls, 0)} -> {after_counts.get(cls, 0)}"
+            for cls in range(NUM_CLASSES)
+        )
         LOGGER.info(
-            "Balanced oversampling expanded training samples from %d to %d "
-            "(class 0: %d -> %d, class 1: %d -> %d).",
+            "Balanced oversampling expanded training samples from %d to %d (%s).",
             sum(before_counts.values()),
             len(train_samples),
-            before_counts.get(0, 0),
-            after_counts.get(0, 0),
-            before_counts.get(1, 0),
-            after_counts.get(1, 0),
+            class_summaries,
         )
     elif config.train_resampling != "none":
         raise ValueError(f"Unsupported train_resampling value: {config.train_resampling!r}")
