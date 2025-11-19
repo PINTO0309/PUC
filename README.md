@@ -36,8 +36,17 @@ source .venv/bin/activate
 
 ## Inference
 ```bash
-uv run python demo_puc.py -v 0 -dlr -dnm -dgm -dhm -ep cuda
-uv run python demo_puc.py -v 0 -dlr -dnm -dgm -dhm -ep tensorrt
+uv run python demo_puc.py \
+-v 0 \
+-pm puc_l_32x24.onnx \
+-dlr -dnm -dgm -dhm \
+-ep cuda
+
+uv run python demo_puc.py \
+-v 0 \
+-pm puc_l_32x24.onnx \
+-dlr -dnm -dgm -dhm \
+-ep tensorrt
 ```
 
 ## Dataset Preparation
