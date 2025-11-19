@@ -802,7 +802,6 @@ def train_pipeline(config: TrainConfig, verbose: bool = False) -> Dict[str, Any]
     normalization = {"mean": list(mean), "std": list(std), "image_size": list(config.image_size)}
 
     train_samples = list(splits["train"])
-    class_weight_samples = list(train_samples)
     train_sampler = None
     if config.train_resampling == "weighted":
         class_counts = Counter(sample.label for sample in train_samples)
@@ -827,6 +826,7 @@ def train_pipeline(config: TrainConfig, verbose: bool = False) -> Dict[str, Any]
         )
     elif config.train_resampling != "none":
         raise ValueError(f"Unsupported train_resampling value: {config.train_resampling!r}")
+    class_weight_samples = list(train_samples)
 
     train_dataset = PUCDataset(train_samples, transform=train_transform)
     val_dataset = PUCDataset(splits["val"], transform=eval_transform) if splits["val"] else None
