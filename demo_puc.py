@@ -37,14 +37,12 @@ BOX_COLORS = [
 
 PHONE_USAGE_LABELS = {
     0: "no_action",
-    1: "call",
-    2: "point",
-    3: "point_somewhere",
+    1: "point",
+    2: "point_somewhere",
 }
 PHONE_USAGE_COLORS = {
-    1: (0, 196, 255),       # bright orange/blue mix
-    2: (0, 220, 60),        # vivid green
-    3: (255, 144, 30),      # bold orange
+    1: (0, 220, 60),        # vivid green
+    2: (255, 144, 30),      # bold orange
 }
 
 # The pairs of classes you want to join

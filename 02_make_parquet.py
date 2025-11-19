@@ -18,15 +18,20 @@ DEFAULT_IMAGE_DIR = ROOT / "data" / "images"
 DEFAULT_OUTPUT_FILE = ROOT / "data" / "dataset.parquet"
 LABEL_MAP = {
     0: "no_action",
-    1: "call",
-    2: "point",
-    3: "point_somewhere",
+    1: "point",
+    2: "point_somewhere",
 }
+LEGACY_CLASS_MAP = {
+    0: 0,
+    2: 1,
+    3: 2,
+}
+LEGACY_SUPPORTED_IDS = set(LEGACY_CLASS_MAP.keys()) | {1}
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate dataset.parquet for four-class phone usage classification.",
+        description="Generate dataset.parquet for three-class phone usage classification.",
     )
     parser.add_argument(
         "--annotation-file",
@@ -49,6 +54,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--train-ratio", type=float, default=0.8, help="Target ratio for the training split.")
     parser.add_argument("--val-ratio", type=float, default=0.2, help="Target ratio for the validation split.")
     parser.add_argument("--seed", type=int, default=42, help="Seed controlling random split assignment.")
+    parser.add_argument(
+        "--annotation-schema",
+        choices=("current", "legacy"),
+        default="current",
+        help="Interpretation of class_id values inside the annotation file. "
+        "Use 'legacy' for the previous four-class files (call rows are dropped, "
+        "point/point_somewhere are remapped to IDs 1/2).",
+    )
     parser.add_argument(
         "--embed-images",
         action="store_true",
@@ -119,6 +132,40 @@ def _normalize_ratios(train_ratio: float, val_ratio: float) -> Dict[str, float]:
         "train": train_ratio / total,
         "val": val_ratio / total,
     }
+
+
+def _normalize_class_ids(df: pd.DataFrame, schema: str) -> pd.DataFrame:
+    df = df.copy()
+    if schema == "legacy":
+        invalid_ids = sorted(set(df["class_id"].unique()) - LEGACY_SUPPORTED_IDS)
+        if invalid_ids:
+            raise ValueError(
+                f"Annotation file contains unsupported class_id values for the legacy schema: {invalid_ids}."
+            )
+        drop_mask = df["class_id"] == 1
+        if drop_mask.any():
+            print(
+                f"[warn] Dropping {int(drop_mask.sum())} legacy call annotations from the dataset.",
+                file=sys.stderr,
+            )
+            df = df[~drop_mask]
+        if df.empty:
+            raise RuntimeError("No annotation rows remain after removing the call class.")
+        df["class_id"] = df["class_id"].map(LEGACY_CLASS_MAP)
+        if df["class_id"].isna().any():
+            bad_rows = sorted(df.loc[df["class_id"].isna(), "class_id"].unique())
+            raise ValueError(f"Unmapped legacy class_id values encountered: {bad_rows}")
+        df["class_id"] = df["class_id"].astype(int)
+        return df
+
+    allowed_ids = set(LABEL_MAP.keys())
+    invalid_ids = sorted(set(df["class_id"].unique()) - allowed_ids)
+    if invalid_ids:
+        raise ValueError(
+            f"Annotation file contains unsupported class_id values: {invalid_ids}. "
+            "Did you mean to run with --annotation-schema legacy?"
+        )
+    return df
 
 
 def _assign_row_splits(count: int, ratios: Dict[str, float], seed: int) -> list[str]:
@@ -192,6 +239,7 @@ def _read_image_bytes(path: Path) -> bytes:
 
 def build_dataset(args: argparse.Namespace) -> pd.DataFrame:
     annotation_df = _load_annotations(args.annotation_file)
+    annotation_df = _normalize_class_ids(annotation_df, args.annotation_schema)
     output_root = args.output.resolve().parent
     output_root.mkdir(parents=True, exist_ok=True)
     image_index = _build_image_index(args.image_dir)

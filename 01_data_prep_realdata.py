@@ -35,9 +35,8 @@ DEFAULT_CLASS_PIE_FILE = ROOT / "data" / "class_distribution.png"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
 CLASS_PREFIX_TO_ID = {
     "no_action": 0,
-    "call": 1,
-    "point": 2,
-    "point_somewhere": 3,
+    "point": 1,
+    "point_somewhere": 2,
 }
 ORDERED_CLASS_PREFIXES = sorted(CLASS_PREFIX_TO_ID.items(), key=lambda item: len(item[0]), reverse=True)
 CLASS_ID_TO_PREFIX = {class_id: prefix for prefix, class_id in CLASS_PREFIX_TO_ID.items()}

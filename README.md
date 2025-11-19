@@ -1,14 +1,17 @@
 # PUC
 
-Phone Usage Classifier (PUC) is a four-class image classification pipeline for understanding how people
+Phone Usage Classifier (PUC) is a three-class image classification pipeline for understanding how people
 interact with smartphones.
 
 - `classid=0` (`no_action`): No interaction with a phone.
-- `classid=1` (`call`): Holding the phone to the ear to make or take a call.
-- `classid=2` (`point`): Pointing or tapping directly on the phone.
-- `classid=3` (`point_somewhere`): Pointing/tapping near the phone or gesturing elsewhere.
+- `classid=1` (`point`): Pointing or tapping directly on the phone.
+- `classid=2` (`point_somewhere`): Pointing/tapping near the phone or gesturing elsewhere.
 
-Prepare a dataset that contains these four classes (either via the `class_id` column or the `label` text field),
+The earlier `call` class has been removed from the training pipeline. If you still rely on the legacy four-class
+annotations, run `02_make_parquet.py --annotation-schema legacy ...` to drop those rows and remap the remaining
+classes to the new IDs.
+
+Prepare a dataset that contains these three classes (either via the `class_id` column or the `label` text field),
 then run the training pipeline:
 
 ```bash
@@ -28,14 +31,16 @@ uv run python 01_data_prep_realdata.py \
 --allow-multi-body
 
 uv run python 02_make_parquet.py --embed-images
+
+# Convert legacy annotations (generated before the three-class change) on the fly:
+uv run python 02_make_parquet.py --annotation-schema legacy --embed-images
 ```
 ```
 Split counts:
-  train: 56655
-    val: 14171
+  train: 49008
+    val: 12253
 Label counts:
          no_action: 40112
-              call: 9565
              point: 11545
    point_somewhere: 9604
 ```

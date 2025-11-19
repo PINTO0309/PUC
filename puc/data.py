@@ -41,9 +41,8 @@ def _normalize_label_name(value: str) -> str:
 
 CLASS_ID_TO_NAME: Dict[int, str] = {
     0: "no_action",
-    1: "call",
-    2: "point",
-    3: "point_somewhere",
+    1: "point",
+    2: "point_somewhere",
 }
 CLASS_NAME_TO_ID: Dict[str, int] = {_normalize_label_name(name): idx for idx, name in CLASS_ID_TO_NAME.items()}
 NUM_CLASSES = len(CLASS_ID_TO_NAME)

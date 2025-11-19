@@ -25,7 +25,7 @@ class ModelConfig:
     rgb_to_yuv_to_y: bool = False
     rgb_to_lab: bool = False
     rgb_to_luv: bool = False
-    num_classes: int = 4
+    num_classes: int = 3
 
 
 _RGB_TO_XYZ = torch.tensor(
