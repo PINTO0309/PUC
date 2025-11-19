@@ -222,4 +222,8 @@ ablation_heatmaps/
 *.tar.gz
 *.parquet
 *.png
+*.PNG
+*.jpg
+*.jpeg
+*.JPG
 split_list.csv

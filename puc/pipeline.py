@@ -796,6 +796,7 @@ def train_pipeline(config: TrainConfig, verbose: bool = False) -> Dict[str, Any]
     normalization = {"mean": list(mean), "std": list(std), "image_size": list(config.image_size)}
 
     train_samples = list(splits["train"])
+    class_weight_samples = list(train_samples)
     train_sampler = None
     if config.train_resampling == "weighted":
         class_counts = Counter(sample.label for sample in train_samples)
@@ -870,7 +871,13 @@ def train_pipeline(config: TrainConfig, verbose: bool = False) -> Dict[str, Any]
         "tensorboard_logdir": str(tb_dir),
     }
 
-    class_weights = _compute_class_weights(train_samples, NUM_CLASSES).to(device)
+    train_class_counts = Counter(sample.label for sample in class_weight_samples)
+    LOGGER.info(
+        "Train split class counts before rebalancing: %s",
+        ", ".join(f"{CLASS_ID_TO_NAME.get(cls, cls)}={count}" for cls, count in sorted(train_class_counts.items())),
+    )
+    class_weights = _compute_class_weights(class_weight_samples, NUM_CLASSES).to(device)
+    LOGGER.info("Applying automatic loss weights: %s", ", ".join(f"{w:.3f}" for w in class_weights.tolist()))
     criterion = nn.CrossEntropyLoss(weight=class_weights)
 
     optimizer = torch.optim.AdamW(

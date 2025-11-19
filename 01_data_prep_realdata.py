@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate annotated crops from videos located under real_data/."""
+"""Generate annotated crops from videos or still images located under real_data/."""
 
 from __future__ import annotations
 
@@ -32,12 +32,15 @@ DETECTOR_INPUT_SIZE = 640
 DETECTOR_BODY_LABEL = 0
 DETECTOR_BODY_THRESHOLD = 0.35
 DEFAULT_CLASS_PIE_FILE = ROOT / "data" / "class_distribution.png"
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
 CLASS_PREFIX_TO_ID = {
     "no_action": 0,
     "call": 1,
     "point": 2,
     "point_somewhere": 3,
 }
+ORDERED_CLASS_PREFIXES = sorted(CLASS_PREFIX_TO_ID.items(), key=lambda item: len(item[0]), reverse=True)
+CLASS_ID_TO_PREFIX = {class_id: prefix for prefix, class_id in CLASS_PREFIX_TO_ID.items()}
 
 
 @dataclass
@@ -51,7 +54,7 @@ class FrameAnnotation:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Convert mp4 videos under real_data/ into annotated PNG crops."
+        description="Convert mp4 videos or labeled image folders into annotated PNG crops."
     )
     parser.add_argument("--input-dir", type=Path, default=DEFAULT_VIDEO_DIR, help="Directory containing real_data mp4 files.")
     parser.add_argument("--image-dir", type=Path, default=DEFAULT_IMAGE_DIR, help="Directory where cropped PNGs are stored.")
@@ -72,7 +75,7 @@ def parse_args() -> argparse.Namespace:
         "--start-folder",
         type=int,
         default=DEFAULT_FOLDER_START,
-        help="Numeric folder index to start from when saving images (default: 2001).",
+        help="Numeric folder index to start from when saving images (default: 1).",
     )
     parser.add_argument(
         "--frame-step",
@@ -88,6 +91,17 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_DETECTOR_MODEL,
         help="ONNX detector used for cropping and filtering (default: deimv2...640.onnx).",
+    )
+    parser.add_argument(
+        "--allow-multi-body",
+        action="store_true",
+        help="When set, keep crops for all detected bodies instead of just the best scoring one.",
+    )
+    parser.add_argument(
+        "--input-image-dir",
+        type=Path,
+        default=None,
+        help="Directory containing still images grouped by class folder names.",
     )
     parser.add_argument(
         "--class-pie-file",
@@ -144,25 +158,23 @@ def _run_detector(session: ort.InferenceSession, input_name: str, image: np.ndar
     return session.run(None, {input_name: blob})[0][0]
 
 
-def detect_person_box(
+def detect_person_boxes(
     session: ort.InferenceSession,
     input_name: str,
     frame: np.ndarray,
-) -> tuple[tuple[float, float, float, float], float] | None:
+) -> list[tuple[tuple[float, float, float, float], float]]:
     detections = _run_detector(session, input_name, frame)
-    best_detection: tuple[np.ndarray, float] | None = None
+    valid: list[tuple[tuple[float, float, float, float], float]] = []
     for det in detections:
         label = int(round(det[0]))
         score = float(det[5])
         if label != DETECTOR_BODY_LABEL or score < DETECTOR_BODY_THRESHOLD:
             continue
-        if best_detection is None or score > best_detection[1]:
-            best_detection = (det, score)
-    if best_detection is None:
-        return None
-    det_array = best_detection[0]
-    box = (float(det_array[1]), float(det_array[2]), float(det_array[3]), float(det_array[4]))
-    return box, best_detection[1]
+        det_array = det
+        box = (float(det_array[1]), float(det_array[2]), float(det_array[3]), float(det_array[4]))
+        valid.append((box, score))
+    valid.sort(key=lambda item: item[1], reverse=True)
+    return valid
 
 
 def crop_frame_using_box(
@@ -187,17 +199,19 @@ def crop_frame_using_box(
     return crop, crop.shape[1], crop.shape[0]
 
 
-def classify_video(path: Path) -> int | None:
-    name = path.stem.lower()
-    normalized = name.replace("-", "_")
-    ordered_prefixes = sorted(CLASS_PREFIX_TO_ID.items(), key=lambda item: len(item[0]), reverse=True)
-    for prefix, class_id in ordered_prefixes:
+def classify_name(name: str) -> int | None:
+    normalized = name.lower().replace("-", "_")
+    for prefix, class_id in ORDERED_CLASS_PREFIXES:
         if normalized.startswith(prefix):
             return class_id
         compact = prefix.replace("_", "")
         if compact and normalized.startswith(compact):
             return class_id
     return None
+
+
+def classify_video(path: Path) -> int | None:
+    return classify_name(path.stem)
 
 
 def iter_video_files(input_dir: Path) -> list[tuple[Path, int]]:
@@ -213,6 +227,38 @@ def iter_video_files(input_dir: Path) -> list[tuple[Path, int]]:
     if not videos:
         print("[info] No matching mp4 files found.", file=sys.stderr)
     return videos
+
+
+def iter_image_files(image_root: Path) -> list[tuple[Path, int]]:
+    images: list[tuple[Path, int]] = []
+    if not image_root.exists():
+        raise FileNotFoundError(f"Input image directory not found: {image_root}")
+
+    def gather(directory: Path, class_id: int) -> None:
+        for path in sorted(directory.rglob("*")):
+            if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES:
+                images.append((path, class_id))
+
+    root_class_id = classify_name(image_root.name)
+    if root_class_id is not None:
+        gather(image_root, root_class_id)
+    else:
+        found_dir = False
+        for entry in sorted(image_root.iterdir()):
+            if not entry.is_dir():
+                continue
+            found_dir = True
+            class_id = classify_name(entry.name)
+            if class_id is None:
+                print(f"[skip] {entry.name} does not match expected class prefixes.", file=sys.stderr)
+                continue
+            gather(entry, class_id)
+        if not found_dir:
+            print(f"[info] No class folders found under {image_root}", file=sys.stderr)
+
+    if not images:
+        print(f"[info] No image files found under {image_root}", file=sys.stderr)
+    return images
 
 
 def ensure_backup(annotation_file: Path, suffix: str) -> Path | None:
@@ -274,14 +320,82 @@ def process_video(
             frame_index += 1
             continue
 
-        detection = detect_person_box(detector_session, detector_input_name, frame)
-        if detection is None:
+        detections = detect_person_boxes(detector_session, detector_input_name, frame)
+        if not detections:
             frame_index += 1
             continue
-        box, _ = detection
+        selected = detections if args.allow_multi_body else detections[:1]
+        timestamp_seconds = frame_index / fps
+        timestamp = f"{timestamp_seconds:.3f}"
+        for det_index, (box, _) in enumerate(selected):
+            crop_result = crop_frame_using_box(frame, box)
+            if crop_result is None:
+                continue
+            crop, width_px, height_px = crop_result
+            if (
+                width_px < args.min_dimension
+                or height_px < args.min_dimension
+                or width_px > args.max_dimension
+                or height_px > args.max_dimension
+            ):
+                continue
+
+            filename_suffix = ""
+            if args.allow_multi_body and len(selected) > 1:
+                filename_suffix = f"_{det_index + 1}"
+            filename = f"{video_id}_{frame_index:06d}_{class_id}{filename_suffix}.png"
+
+            if not args.dry_run:
+                output_path = next_image_path(
+                    args.image_dir, args.start_folder, args.images_per_folder, generated_count + kept, filename
+                )
+                try:
+                    save_frame(crop, output_path, overwrite=args.overwrite)
+                except FileExistsError:
+                    continue
+
+            annotations.append(
+                FrameAnnotation(
+                    filename=filename,
+                    video_id=video_id,
+                    timestamp=timestamp,
+                    person_id=args.person_id,
+                    class_id=class_id,
+                )
+            )
+            kept += 1
+        frame_index += 1
+
+    capture.release()
+    print(f"[info] Processed {video_path.name}: kept {kept} frames.")
+    return kept, annotations
+
+
+def process_image_file(
+    image_path: Path,
+    class_id: int,
+    args: argparse.Namespace,
+    generated_count: int,
+    detector_session: ort.InferenceSession,
+    detector_input_name: str,
+) -> tuple[int, list[FrameAnnotation]]:
+    frame = cv2.imread(str(image_path))
+    if frame is None:
+        print(f"[warn] Skipping unreadable image {image_path}", file=sys.stderr)
+        return 0, []
+
+    detections = detect_person_boxes(detector_session, detector_input_name, frame)
+    if not detections:
+        return 0, []
+
+    selected = detections if args.allow_multi_body else detections[:1]
+    annotations: list[FrameAnnotation] = []
+    timestamp = "0.000"
+    kept = 0
+
+    for det_index, (box, _) in enumerate(selected):
         crop_result = crop_frame_using_box(frame, box)
         if crop_result is None:
-            frame_index += 1
             continue
         crop, width_px, height_px = crop_result
         if (
@@ -290,37 +404,34 @@ def process_video(
             or width_px > args.max_dimension
             or height_px > args.max_dimension
         ):
-            frame_index += 1
             continue
 
-        timestamp_seconds = frame_index / fps
-        timestamp = f"{timestamp_seconds:.3f}"
-        filename = f"{video_id}_{frame_index:06d}_{class_id}.png"
+        sequence_index = generated_count + kept
+        filename_suffix = ""
+        if args.allow_multi_body and len(selected) > 1:
+            filename_suffix = f"_{det_index + 1}"
+        filename = f"{image_path.stem}_{sequence_index:06d}_{class_id}{filename_suffix}.png"
 
         if not args.dry_run:
             output_path = next_image_path(
-                args.image_dir, args.start_folder, args.images_per_folder, generated_count + kept, filename
+                args.image_dir, args.start_folder, args.images_per_folder, sequence_index, filename
             )
             try:
                 save_frame(crop, output_path, overwrite=args.overwrite)
             except FileExistsError:
-                frame_index += 1
                 continue
 
         annotations.append(
             FrameAnnotation(
                 filename=filename,
-                video_id=video_id,
+                video_id=image_path.stem,
                 timestamp=timestamp,
                 person_id=args.person_id,
                 class_id=class_id,
             )
         )
         kept += 1
-        frame_index += 1
 
-    capture.release()
-    print(f"[info] Processed {video_path.name}: kept {kept} frames.")
     return kept, annotations
 
 
@@ -337,15 +448,31 @@ def append_annotations(annotation_file: Path, rows: list[FrameAnnotation]) -> No
     print(f"[annotation] Appended {len(rows)} rows to {annotation_file}.")
 
 
-def save_class_distribution_pie(rows: list[FrameAnnotation], output_path: Path) -> None:
-    counts = Counter(row.class_id for row in rows)
+def load_annotation_class_counts(annotation_file: Path) -> Counter[int]:
+    counts: Counter[int] = Counter()
+    if not annotation_file.exists():
+        return counts
+    with annotation_file.open("r", encoding="utf-8") as handle:
+        reader = csv.reader(handle)
+        for row in reader:
+            if len(row) < 5:
+                continue
+            try:
+                class_id = int(row[4])
+            except ValueError:
+                continue
+            counts[class_id] += 1
+    return counts
+
+
+def save_class_distribution_pie(counts: Counter[int], output_path: Path) -> None:
     if not counts:
         print("[pie] No annotations available; skipping pie chart.")
         return
     labels = []
     sizes = []
     for class_id, count in sorted(counts.items()):
-        prefix = next((name for name, cid in CLASS_PREFIX_TO_ID.items() if cid == class_id), str(class_id))
+        prefix = CLASS_ID_TO_PREFIX.get(class_id, str(class_id))
         labels.append(f"{prefix} ({count})")
         sizes.append(count)
     fig, ax = plt.subplots(figsize=(6, 6))
@@ -363,10 +490,31 @@ def save_class_distribution_pie(rows: list[FrameAnnotation], output_path: Path) 
     print(f"[pie] Saved class distribution chart to {output_path}")
 
 
+def log_class_split_counts(counts: Counter[int]) -> None:
+    total = sum(counts.values())
+    if total == 0:
+        print("[counts] No annotations available; skipping split counts output.")
+        return
+    print("[counts] Split counts (existing + new):")
+    print(f"[counts] Total annotations: {total}")
+    for class_id, count in sorted(counts.items()):
+        label = CLASS_ID_TO_PREFIX.get(class_id, str(class_id))
+        percentage = (count / total) * 100.0
+        print(f"[counts] {label}: {count} ({percentage:.1f}%)")
+
+
 def main() -> None:
     args = parse_args()
-    videos = iter_video_files(args.input_dir)
-    if not videos:
+    videos: list[tuple[Path, int]] = []
+    if args.input_image_dir is None:
+        videos = iter_video_files(args.input_dir)
+    else:
+        print("[info] --input-image-dir specified; skipping video processing.")
+    image_files: list[tuple[Path, int]] = []
+    if args.input_image_dir is not None:
+        image_files = iter_image_files(args.input_image_dir)
+
+    if not videos and not image_files:
         return
 
     detector_session, detector_input_name = load_detector_session(args.detector_model)
@@ -376,6 +524,18 @@ def main() -> None:
     for video_path, class_id in videos:
         kept, rows = process_video(
             video_path,
+            class_id,
+            args,
+            total_kept,
+            detector_session,
+            detector_input_name,
+        )
+        total_kept += kept
+        all_rows.extend(rows)
+
+    for image_path, class_id in image_files:
+        kept, rows = process_image_file(
+            image_path,
             class_id,
             args,
             total_kept,
@@ -395,8 +555,10 @@ def main() -> None:
 
     ensure_backup(args.annotation_file, args.backup_suffix)
     append_annotations(args.annotation_file, all_rows)
-    save_class_distribution_pie(all_rows, args.class_pie_file)
-    print(f"[done] Generated {total_kept} frames from {len(videos)} videos.")
+    class_counts = load_annotation_class_counts(args.annotation_file)
+    save_class_distribution_pie(class_counts, args.class_pie_file)
+    log_class_split_counts(class_counts)
+    print(f"[done] Generated {total_kept} frames from {len(videos)} videos and {len(image_files)} images.")
 
 
 if __name__ == "__main__":
