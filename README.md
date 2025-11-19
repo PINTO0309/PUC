@@ -11,6 +11,10 @@ The earlier `call` class has been removed from the training pipeline. If you sti
 annotations, run `02_make_parquet.py --annotation-schema legacy ...` to drop those rows and remap the remaining
 classes to the new IDs.
 
+```bash
+uv run python demo_puc.py -v 0 -dlr -dnm -dgm -dhm -ep tensorrt
+```
+
 Prepare a dataset that contains these three classes (either via the `class_id` column or the `label` text field),
 then run the training pipeline:
 
