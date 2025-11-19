@@ -20,8 +20,14 @@ Use `python -m puc.pipeline predict ...`, `webcam`, or `webcam_onnx` to run infe
 ## Dataset Preparation
 
 ```bash
-python 01_data_prep_realdata.py
-python 02_make_parquet.py --embed-images
+uv run python 01_data_prep_realdata.py
+
+uv run python 01_data_prep_realdata.py \
+--input-image-dir real_images \
+--start-folder 1001 \
+--allow-multi-body
+
+uv run python 02_make_parquet.py --embed-images
 ```
 ```
 Split counts:
