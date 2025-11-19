@@ -7,10 +7,6 @@ interact with smartphones.
 - `classid=1` (`point`): Pointing the smartphone towards the camera.
 - `classid=2` (`point_somewhere`): Pointing the smartphone somewhere other than the camera.
 
-The earlier `call` class has been removed from the training pipeline. If you still rely on the legacy four-class
-annotations, run `02_make_parquet.py --annotation-schema legacy ...` to drop those rows and remap the remaining
-classes to the new IDs.
-
 ```bash
 uv run python demo_puc.py -v 0 -dlr -dnm -dgm -dhm -ep tensorrt
 ```
@@ -35,21 +31,18 @@ uv run python 01_data_prep_realdata.py \
 --allow-multi-body
 
 uv run python 02_make_parquet.py --embed-images
-
-# Convert legacy annotations (generated before the three-class change) on the fly:
-uv run python 02_make_parquet.py --annotation-schema legacy --embed-images
 ```
 ```
 Split counts:
-  train: 49030
-    val: 12231
+  train: 51240
+    val: 12818
 Label counts:
-         no_action: 40112
+         no_action: 42909
              point: 11545
    point_somewhere: 9604
 ```
 
-<img width="679" height="482" alt="class_distribution" src="https://github.com/user-attachments/assets/c5b1d0f0-cb79-4146-99e7-1142c6b24bc3" />
+<img width="673" height="482" alt="class_distribution" src="https://github.com/user-attachments/assets/60d8e828-f2ff-49f2-aa41-6d611e29cb2a" />
 
 ## Training Pipeline
 
@@ -81,6 +74,7 @@ uv run python -m puc train \
 --output_dir runs/puc_${SIZE} \
 --epochs 100 \
 --batch_size 256 \
+--train_resampling balanced \
 --image_size ${SIZE} \
 --base_channels 32 \
 --num_blocks 4 \
@@ -94,9 +88,10 @@ Inverted residual + SE variant (recommended for higher capacity):
 
 ```bash
 SIZE=32x24
+VAR=s
 uv run python -m puc train \
 --data_root data/dataset.parquet \
---output_dir runs/puc_is_s_${SIZE} \
+--output_dir runs/puc_is_${VAR}_${SIZE} \
 --epochs 100 \
 --batch_size 256 \
 --train_resampling balanced \
@@ -108,6 +103,7 @@ uv run python -m puc train \
 --seed 42 \
 --device auto \
 --use_amp
+
 ```
 
 ConvNeXt-style backbone with transformer head over pooled tokens:
