@@ -13,9 +13,11 @@ https://github.com/user-attachments/assets/18acf290-63b6-40ba-a38c-a5712dedc19c
 |:-:|:-:|:-:|:-:|:-:|
 |P|115 KB||ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_p_32x24.onnx)|
 |N|176 KB||ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_n_32x24.onnx)|
-|T|279 KB||ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_t_32x24.onnx)|
-|S|495 KB|0.9975|0.39 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_s_32x24.onnx)|
-|C|875 KB||ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_c_32x24.onnx)|
+|T|280 KB|0.9923|0.31 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_t_32x24.onnx)|
+|S|495 KB|0.9975|0.35 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_s_32x24.onnx)|
+|C| KB||ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_c_32x24.onnx)|
+|M| KB||ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_m_32x24.onnx)|
+|L|6.4 MB|0.9986|0.73 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_l_32x24.onnx)|
 
 ## Data sample
 
