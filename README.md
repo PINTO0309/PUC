@@ -31,13 +31,13 @@ uv run python 02_make_parquet.py --embed-images
 ```
 ```
 Split counts:
-  train: 24994
-    val: 6185
+  train: 56655
+    val: 14171
 Label counts:
-         no_action: 7224
-              call: 7695
-             point: 8713
-   point_somewhere: 7547
+         no_action: 40112
+              call: 9565
+             point: 11545
+   point_somewhere: 9604
 ```
 
 ## Training Pipeline
