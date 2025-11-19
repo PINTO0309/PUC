@@ -38,15 +38,6 @@ uv run python demo_puc.py -v 0 -dlr -dnm -dgm -dhm -ep cuda
 uv run python demo_puc.py -v 0 -dlr -dnm -dgm -dhm -ep tensorrt
 ```
 
-Prepare a dataset that contains these three classes (either via the `class_id` column or the `label` text field),
-then run the training pipeline:
-
-```bash
-python -m puc.pipeline train --data_root /path/to/dataset --output_dir ./outputs
-```
-
-Use `python -m puc.pipeline predict ...`, `webcam`, or `webcam_onnx` to run inference with trained checkpoints.
-
 ## Dataset Preparation
 
 ```bash
