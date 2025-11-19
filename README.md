@@ -134,7 +134,7 @@ uv run python -m puc train \
 ```bash
 uv run python -m puc exportonnx \
 --checkpoint runs/puc_is_s_32x24/puc_best_epoch0049_f1_0.9939.pt \
---output puc_s.onnx \
+--output puc_s_32x24.onnx \
 --opset 17
 ```
 
