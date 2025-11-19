@@ -487,20 +487,20 @@ def _build_transforms(image_size: Any, mean: Sequence[float], std: Sequence[floa
         [
             transforms.Resize((height, width)),
             transforms.RandomHorizontalFlip(p=0.5),
-            # transforms.RandomApply(
-            #     [
-            #         transforms.RandomAffine(
-            #             degrees=0,
-            #             translate=(0.05, 0.05),
-            #             scale=(0.9, 1.1),
-            #             fill=0,
-            #         )
-            #     ],
-            #     p=0.4,
-            # ),
+            transforms.RandomApply(
+                [
+                    transforms.RandomAffine(
+                        degrees=0,
+                        translate=(0.05, 0.05),
+                        scale=(0.9, 1.1),
+                        fill=0,
+                    )
+                ],
+                p=0.4,
+            ),
             transforms_v2.RandomPhotometricDistort(p=0.5),
             RandomCLAHE(p=0.01, tile_grid_size=(4, 4)),
-            # transforms.RandomGrayscale(p=0.01),
+            transforms.RandomGrayscale(p=0.01),
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std),
         ]
