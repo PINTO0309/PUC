@@ -500,7 +500,7 @@ def _build_transforms(image_size: Any, mean: Sequence[float], std: Sequence[floa
             ),
             transforms_v2.RandomPhotometricDistort(p=0.5),
             RandomCLAHE(p=0.01, tile_grid_size=(4, 4)),
-            transforms.RandomGrayscale(p=0.01),
+            # transforms.RandomGrayscale(p=0.01),
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std),
         ]
