@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/18acf290-63b6-40ba-a38c-a5712dedc19c
 
 |1|2|3|4|
 |:-:|:-:|:-:|:-:|
-|||||
+|<img width="24" height="32" alt="000000084193_022002_0" src="https://github.com/user-attachments/assets/9e661b3d-f5ee-4a4a-bcee-8d28d6ac020a" />|<img width="24" height="32" alt="no_action1_004005_0" src="https://github.com/user-attachments/assets/5e26aa1d-f849-47d2-ae73-88ec2c4bedd9" />|<img width="24" height="32" alt="point1_001301_1" src="https://github.com/user-attachments/assets/fe84a427-8d86-45f1-b77e-e4d6778b1a23" />|<img width="24" height="32" alt="point_somewhere4_000156_2" src="https://github.com/user-attachments/assets/3682f7e5-26a0-4e70-a38b-93c60c3f5a31" />|
 
 ## Setup
 
