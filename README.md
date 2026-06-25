@@ -39,13 +39,13 @@ source .venv/bin/activate
 ```bash
 uv run python demo_puc.py \
 -v 0 \
--pm puc_l_32x24.onnx \
+-pm puc_l_48x48.onnx \
 -dlr -dnm -dgm -dhm \
 -ep cuda
 
 uv run python demo_puc.py \
 -v 0 \
--pm puc_l_32x24.onnx \
+-pm puc_l_48x48.onnx \
 -dlr -dnm -dgm -dhm \
 -ep tensorrt
 ```
