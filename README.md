@@ -8,7 +8,7 @@ Phone Usage Classifier (PUC) is a three-class image classification pipeline for 
 - `classid=1` (`point_somewhere`): Pointing the smartphone somewhere other than the camera.
 - `classid=2` (`point`): Pointing the smartphone towards the camera.
 
-https://github.com/user-attachments/assets/77b3a510-8c54-480a-a8f0-1e4c185cabd0
+https://github.com/user-attachments/assets/56cb5147-78e7-4a9e-85ac-59db79b442c3
 
 |Variant|Size|F1|CPU<br>inference<br>latency|ONNX|
 |:-:|:-:|:-:|:-:|:-:|
