@@ -37,30 +37,31 @@ BOX_COLORS = [
 
 PHONE_USAGE_LABELS = {
     0: "no_action",
-    1: "point",
-    2: "point_somewhere",
+    1: "point_somewhere",
+    2: "point",
 }
 PHONE_USAGE_COLORS = {
     1: (0, 220, 60),        # vivid green
     2: (255, 144, 30),      # bold orange
 }
+PHONE_USAGE_TARGET_CLASS_ID = 23
+PHONE_USAGE_CROP_EXPANSION = 2.5
+DEFAULT_PUC_MODEL = 'puc_s_48x48.onnx'
+DEFAULT_PUC_INPUT_SIZE = (48, 48)
 
-# The pairs of classes you want to join
-# (there is some overlap because there are left and right classes)
-EDGES = [
-    (21, 22), (21, 22),  # collarbone -> shoulder (left and right)
-    (21, 23),            # collarbone -> solar_plexus
-    (22, 24), (22, 24),  # shoulder -> elbow (left and right)
-    (22, 30), (22, 30),  # shoulder -> hip_joint (left and right)
-    (24, 25), (24, 25),  # elbow -> wrist (left and right)
-    (23, 29),            # solar_plexus -> abdomen
-    (29, 30), (29, 30),  # abdomen -> hip_joint (left and right)
-    (30, 31), (30, 31),  # hip_joint -> knee (left and right)
-    (31, 32), (31, 32),  # knee -> ankle (left and right)
-]
+HAND_CLASS_ID = 23
+HAND_LEFT_CLASS_ID = 24
+HAND_RIGHT_CLASS_ID = 25
+OBJECT_CLASS_IDS = {0, 5, 6, 7, 16, 17, 18, 19, 20, HAND_CLASS_ID, HAND_LEFT_CLASS_ID, HAND_RIGHT_CLASS_ID, 27}
+ATTRIBUTE_CLASS_IDS = {1, 2, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15}
+KEYPOINT_CLASS_IDS = {21, 22, 26}
+YOLO_NMS_IOU_THRESHOLD = 0.45
 
-BODY_LONG_HISTORY_SIZE = 10
-BODY_SHORT_HISTORY_SIZE = 6
+# YOLOMIT wholebody28 does not provide the previous full keypoint chain.
+EDGES: List[Tuple[int, int]] = []
+
+PHONE_USAGE_LONG_HISTORY_SIZE = 10
+PHONE_USAGE_SHORT_HISTORY_SIZE = 6
 
 class Color(Enum):
     BLACK          = '\033[30m'
@@ -110,15 +111,15 @@ class Box():
     is_used: bool = False
     person_id: int = -1
     track_id: int = -1
-    body_prob_sitting: float = -1.0
-    body_state: int = -1  # -1: Unknown, 0: not_sitting, 1: sitting
-    body_label: str = ''
+    phone_confidence: float = -1.0
+    phone_state: int = -1  # -1: Unknown, 0: no_action, 1: action
+    phone_label: str = ''
     phone_class: int = -1
     phone_probs: Optional[List[float]] = None
     state_track_id: int = -1
 
 
-class BodyStateHistory:
+class PhoneUsageStateHistory:
     def __init__(self, long_size: int, short_size: int) -> None:
         self.long_history: Deque[bool] = deque(maxlen=long_size)
         self.short_history: Deque[bool] = deque(maxlen=short_size)
@@ -416,12 +417,12 @@ class AbstractModel(ABC):
     ) -> List[Box]:
         raise NotImplementedError()
 
-class DEIMv2(AbstractModel):
+class WholeBodyDetector(AbstractModel):
     def __init__(
         self,
         *,
         runtime: Optional[str] = 'onnx',
-        model_path: Optional[str] = 'deimv2_dinov3_x_wholebody34_1750query_n_batch_640x640.onnx',
+        model_path: Optional[str] = 'yolomit_t_wholebody28_1x3x480x640.onnx',
         obj_class_score_th: Optional[float] = 0.35,
         attr_class_score_th: Optional[float] = 0.70,
         keypoint_th: Optional[float] = 0.35,
@@ -432,10 +433,10 @@ class DEIMv2(AbstractModel):
         Parameters
         ----------
         runtime: Optional[str]
-            Runtime for DEIMv2. Default: onnx
+            Runtime for WholeBodyDetector. Default: onnx
 
         model_path: Optional[str]
-            ONNX/TFLite file path for DEIMv2
+            ONNX/TFLite file path for the YOLOMIT whole-body object detector.
 
         obj_class_score_th: Optional[float]
             Object score threshold. Default: 0.35
@@ -457,8 +458,34 @@ class DEIMv2(AbstractModel):
             keypoint_th=keypoint_th,
             providers=providers,
         )
-        self.mean: np.ndarray = np.asarray([0.485, 0.456, 0.406], dtype=np.float32).reshape([3,1,1]) # Not used in DEIMv2
-        self.std: np.ndarray = np.asarray([0.229, 0.224, 0.225], dtype=np.float32).reshape([3,1,1]) # Not used in DEIMv2
+        self.mean: np.ndarray = np.asarray([0.485, 0.456, 0.406], dtype=np.float32).reshape([3,1,1]) # Not used in WholeBodyDetector
+        self.std: np.ndarray = np.asarray([0.229, 0.224, 0.225], dtype=np.float32).reshape([3,1,1]) # Not used in WholeBodyDetector
+        self._input_height, self._input_width = self._resolve_input_size()
+
+    def _resolve_input_size(self) -> Tuple[int, int]:
+        default_height, default_width = 480, 640
+        input_shape: Optional[List[int]] = None
+        if self._runtime == 'onnx':
+            input_shape = list(self._interpreter.get_inputs()[0].shape)
+        elif self._input_details:
+            input_shape = self._input_details[0].get('shape')
+            if input_shape is not None:
+                input_shape = list(input_shape)
+
+        def _safe_dim(value: Any, default: int) -> int:
+            try:
+                if value is None:
+                    return default
+                return int(value)
+            except (TypeError, ValueError):
+                return default
+
+        if not input_shape or len(input_shape) <= max(self._h_index, self._w_index):
+            return default_height, default_width
+
+        height = _safe_dim(input_shape[self._h_index], default_height)
+        width = _safe_dim(input_shape[self._w_index], default_width)
+        return height, width
 
     def __call__(
         self,
@@ -486,7 +513,7 @@ class DEIMv2(AbstractModel):
         Returns
         -------
         result_boxes: List[Box]
-            Predicted boxes: [classid, score, x1, y1, x2, y2, cx, cy, atrributes, is_used=False]
+            Predicted boxes: [classid, score, x1, y1, x2, y2, cx, cy, attributes, is_used=False]
         """
         temp_image = copy.deepcopy(image)
         # PreProcess
@@ -497,7 +524,7 @@ class DEIMv2(AbstractModel):
         # Inference
         inferece_image = np.asarray([resized_image], dtype=self._input_dtypes[0])
         outputs = super().__call__(input_datas=[inferece_image])
-        boxes = outputs[0][0]
+        boxes = outputs[0]
         # PostProcess
         result_boxes = \
             self._postprocess(
@@ -524,8 +551,11 @@ class DEIMv2(AbstractModel):
         Returns
         -------
         resized_image: np.ndarray
-            Resized and normalized image.
+            RGB CHW float32 image normalized to 0.0-1.0.
         """
+        image = cv2.resize(image, (self._input_width, self._input_height), interpolation=cv2.INTER_LINEAR)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = image.astype(np.float32) / 255.0
         image = image.transpose(self._swap)
         image = \
             np.ascontiguousarray(
@@ -551,7 +581,8 @@ class DEIMv2(AbstractModel):
             Entire image.
 
         boxes: np.ndarray
-            float32[N, 7]. [instances, [batchno, classid, score, x1, y1, x2, y2]].
+            YOLOMIT raw output. Expected shape is [32, 6300] or [1, 32, 6300],
+            containing [cx, cy, w, h, class0..class27].
 
         disable_generation_identification_mode: bool
 
@@ -574,51 +605,32 @@ class DEIMv2(AbstractModel):
         box_score_threshold: float = min([self._obj_class_score_th, self._attr_class_score_th, self._keypoint_th])
 
         if len(boxes) > 0:
-            scores = boxes[:, 5:6]
-            keep_idxs = scores[:, 0] > box_score_threshold
-            scores_keep = scores[keep_idxs, :]
-            boxes_keep = boxes[keep_idxs, :]
+            result_boxes = self._decode_yolomit28_output(
+                raw_output=boxes,
+                image_width=image_width,
+                image_height=image_height,
+                score_threshold=box_score_threshold,
+            )
 
-            if len(boxes_keep) > 0:
-                # Object filter
-                for box, score in zip(boxes_keep, scores_keep):
-                    classid = int(box[0])
-                    x_min = int(max(0, box[1]) * image_width)
-                    y_min = int(max(0, box[2]) * image_height)
-                    x_max = int(min(box[3], 1.0) * image_width)
-                    y_max = int(min(box[4], 1.0) * image_height)
-                    cx = (x_min + x_max) // 2
-                    cy = (y_min + y_max) // 2
-                    result_boxes.append(
-                        Box(
-                            classid=classid,
-                            score=float(score),
-                            x1=x_min,
-                            y1=y_min,
-                            x2=x_max,
-                            y2=y_max,
-                            cx=cx,
-                            cy=cy,
-                            generation=-1, # -1: Unknown, 0: Adult, 1: Child
-                            gender=-1, # -1: Unknown, 0: Male, 1: Female
-                            handedness=-1, # -1: Unknown, 0: Left, 1: Right
-                            head_pose=-1, # -1: Unknown, 0: Front, 1: Right-Front, 2: Right-Side, 3: Right-Back, 4: Back, 5: Left-Back, 6: Left-Side, 7: Left-Front
-                        )
-                    )
+            if len(result_boxes) > 0:
+                result_boxes = self._classwise_nms(
+                    boxes=result_boxes,
+                    iou_threshold=YOLO_NMS_IOU_THRESHOLD,
+                )
                 # Object filter
                 result_boxes = [
                     box for box in result_boxes \
-                        if (box.classid in [0,5,6,7,16,17,18,19,20,26,27,28,33] and box.score >= self._obj_class_score_th) or box.classid not in [0,5,6,7,16,17,18,19,20,26,27,28,33]
+                        if (box.classid in OBJECT_CLASS_IDS and box.score >= self._obj_class_score_th) or box.classid not in OBJECT_CLASS_IDS
                 ]
                 # Attribute filter
                 result_boxes = [
                     box for box in result_boxes \
-                        if (box.classid in [1,2,3,4,8,9,10,11,12,13,14,15] and box.score >= self._attr_class_score_th) or box.classid not in [1,2,3,4,8,9,10,11,12,13,14,15]
+                        if (box.classid in ATTRIBUTE_CLASS_IDS and box.score >= self._attr_class_score_th) or box.classid not in ATTRIBUTE_CLASS_IDS
                 ]
                 # Keypoint filter
                 result_boxes = [
                     box for box in result_boxes \
-                        if (box.classid in [21,22,23,24,25,29,30,31,32] and box.score >= self._keypoint_th) or box.classid not in [21,22,23,24,25,29,30,31,32]
+                        if (box.classid in KEYPOINT_CLASS_IDS and box.score >= self._keypoint_th) or box.classid not in KEYPOINT_CLASS_IDS
                 ]
 
                 # Adult, Child merge
@@ -671,28 +683,109 @@ class DEIMv2(AbstractModel):
                 # 2. Connect either the Left-Hand or the Right-Hand with the highest score and the highest IoU with the Hand.
                 # 3. Exclude Left-Hand and Right-Hand from detection results
                 if not disable_left_and_right_hand_identification_mode:
-                    hand_boxes = [box for box in result_boxes if box.classid == 26]
-                    left_right_hand_boxes = [box for box in result_boxes if box.classid in [27, 28]]
+                    hand_boxes = [box for box in result_boxes if box.classid == HAND_CLASS_ID]
+                    left_right_hand_boxes = [box for box in result_boxes if box.classid in [HAND_LEFT_CLASS_ID, HAND_RIGHT_CLASS_ID]]
                     self._find_most_relevant_obj(base_objs=hand_boxes, target_objs=left_right_hand_boxes)
-                result_boxes = [box for box in result_boxes if box.classid not in [27, 28]]
+                result_boxes = [box for box in result_boxes if box.classid not in [HAND_LEFT_CLASS_ID, HAND_RIGHT_CLASS_ID]]
 
                 # Keypoints NMS
                 # Suppression of overdetection
-                # classid: 21 -> collarbone
-                # classid: 22 -> shoulder
-                # classid: 23 -> solar_plexus
-                # classid: 24 -> elbow
-                # classid: 25 -> wrist
-                # classid: 29 -> abdomen
-                # classid: 30 -> hip_joint
-                # classid: 31 -> knee
-                # classid: 32 -> ankle
-                for target_classid in [21,22,23,24,25,29,30,31,32]:
+                # classid: 21 -> shoulder
+                # classid: 22 -> elbow
+                # classid: 26 -> knee
+                for target_classid in KEYPOINT_CLASS_IDS:
                     keypoints_boxes = [box for box in result_boxes if box.classid == target_classid]
                     filtered_keypoints_boxes = self._nms(target_objs=keypoints_boxes, iou_threshold=0.20)
                     result_boxes = [box for box in result_boxes if box.classid != target_classid]
                     result_boxes = result_boxes + filtered_keypoints_boxes
         return result_boxes
+
+    def _decode_yolomit28_output(
+        self,
+        *,
+        raw_output: np.ndarray,
+        image_width: int,
+        image_height: int,
+        score_threshold: float,
+    ) -> List[Box]:
+        predictions = np.asarray(raw_output)
+        if predictions.ndim == 3 and predictions.shape[0] == 1:
+            predictions = predictions[0]
+        if predictions.ndim != 2:
+            raise ValueError(f"Unsupported YOLOMIT output shape: {predictions.shape}")
+        if predictions.shape[0] == 32:
+            predictions = predictions.T
+        elif predictions.shape[1] != 32:
+            raise ValueError(f"Unsupported YOLOMIT output shape: {predictions.shape}")
+
+        boxes: List[Box] = []
+        scale_x = image_width / float(self._input_width)
+        scale_y = image_height / float(self._input_height)
+
+        xywh = predictions[:, :4]
+        class_scores = predictions[:, 4:]
+        best_class_ids = np.argmax(class_scores, axis=1)
+        best_scores = np.max(class_scores, axis=1)
+        keep_indices = np.where(best_scores > score_threshold)[0]
+
+        for idx in keep_indices:
+            classid = int(best_class_ids[idx])
+            if classid < 0 or classid > 27:
+                continue
+
+            cx_in, cy_in, w_in, h_in = xywh[idx]
+            x_min = int(round((float(cx_in) - float(w_in) / 2.0) * scale_x))
+            y_min = int(round((float(cy_in) - float(h_in) / 2.0) * scale_y))
+            x_max = int(round((float(cx_in) + float(w_in) / 2.0) * scale_x))
+            y_max = int(round((float(cy_in) + float(h_in) / 2.0) * scale_y))
+
+            x_min = max(0, min(x_min, image_width - 1))
+            y_min = max(0, min(y_min, image_height - 1))
+            x_max = max(0, min(x_max, image_width))
+            y_max = max(0, min(y_max, image_height))
+            if x_max <= x_min or y_max <= y_min:
+                continue
+
+            boxes.append(
+                Box(
+                    classid=classid,
+                    score=float(best_scores[idx]),
+                    x1=x_min,
+                    y1=y_min,
+                    x2=x_max,
+                    y2=y_max,
+                    cx=(x_min + x_max) // 2,
+                    cy=(y_min + y_max) // 2,
+                    generation=-1,
+                    gender=-1,
+                    handedness=-1,
+                    head_pose=-1,
+                )
+            )
+        return boxes
+
+    def _classwise_nms(
+        self,
+        *,
+        boxes: List[Box],
+        iou_threshold: float,
+    ) -> List[Box]:
+        selected: List[Box] = []
+        class_ids = sorted({box.classid for box in boxes})
+        for classid in class_ids:
+            candidates = sorted(
+                [box for box in boxes if box.classid == classid],
+                key=lambda box: box.score,
+                reverse=True,
+            )
+            while candidates:
+                current = candidates.pop(0)
+                selected.append(current)
+                candidates = [
+                    box for box in candidates
+                    if self._calculate_iou(base_obj=current, target_obj=box) < iou_threshold
+                ]
+        return selected
 
     def _find_most_relevant_obj(
         self,
@@ -772,10 +865,10 @@ class DEIMv2(AbstractModel):
                     base_obj.head_pose = 7
                     most_relevant_obj.is_used = True
 
-                elif most_relevant_obj.classid == 27:
+                elif most_relevant_obj.classid == HAND_LEFT_CLASS_ID:
                     base_obj.handedness = 0
                     most_relevant_obj.is_used = True
-                elif most_relevant_obj.classid == 28:
+                elif most_relevant_obj.classid == HAND_RIGHT_CLASS_ID:
                     base_obj.handedness = 1
                     most_relevant_obj.is_used = True
 
@@ -852,7 +945,7 @@ class PUCClassifier(AbstractModel):
         self,
         *,
         runtime: Optional[str] = 'onnx',
-        model_path: Optional[str] = 'puc_s_32x24.onnx',
+        model_path: Optional[str] = DEFAULT_PUC_MODEL,
         providers: Optional[List] = None,
     ):
         super().__init__(
@@ -866,7 +959,7 @@ class PUCClassifier(AbstractModel):
         self._input_height, self._input_width = self._resolve_input_size()
 
     def _resolve_input_size(self) -> Tuple[int, int]:
-        default_height, default_width = 32, 32
+        default_height, default_width = DEFAULT_PUC_INPUT_SIZE
         input_shape: Optional[List[int]] = None
         if self._runtime == 'onnx':
             input_shape = list(self._interpreter.get_inputs()[0].shape)
@@ -909,7 +1002,7 @@ class PUCClassifier(AbstractModel):
         height = self._input_height
         width = self._input_width
         if height <= 0 or width <= 0:
-            raise ValueError('Invalid target size for PGC preprocessing.')
+            raise ValueError('Invalid target size for PUC preprocessing.')
         resized = cv2.resize(image, (width, height), interpolation=cv2.INTER_LINEAR)
         resized = resized.astype(np.float32) / 255.0
         resized = resized.transpose(self._swap)
@@ -950,6 +1043,89 @@ def crop_image_with_margin(
     if x2 <= x1 or y2 <= y1:
         return None
     return image[y1:y2, x1:x2].copy()
+
+def crop_image_with_expansion(
+    image: np.ndarray,
+    box: Box,
+    *,
+    expansion: float,
+) -> Optional[np.ndarray]:
+    """Extract a center-expanded detection region, matching data/extract_hand_crops.py."""
+    if image is None or image.size == 0:
+        return None
+    if expansion <= 0:
+        raise ValueError('Expansion must be positive.')
+
+    frame_h, frame_w = image.shape[:2]
+    box_width = float(box.x2 - box.x1)
+    box_height = float(box.y2 - box.y1)
+    if box_width <= 0 or box_height <= 0:
+        return None
+
+    center_x = (float(box.x1) + float(box.x2)) / 2.0
+    center_y = (float(box.y1) + float(box.y2)) / 2.0
+    expanded_width = box_width * expansion
+    expanded_height = box_height * expansion
+
+    x1 = int(np.floor(center_x - expanded_width / 2.0))
+    y1 = int(np.floor(center_y - expanded_height / 2.0))
+    x2 = int(np.ceil(center_x + expanded_width / 2.0))
+    y2 = int(np.ceil(center_y + expanded_height / 2.0))
+
+    x1 = max(0, min(frame_w, x1))
+    x2 = max(0, min(frame_w, x2))
+    y1 = max(0, min(frame_h, y1))
+    y2 = max(0, min(frame_h, y2))
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return image[y1:y2, x1:x2].copy()
+
+def find_body_for_phone_usage_target(target_box: Box, body_boxes: List[Box]) -> Optional[Box]:
+    candidates = [
+        body_box
+        for body_box in body_boxes
+        if body_box.x1 <= target_box.cx <= body_box.x2 and body_box.y1 <= target_box.cy <= body_box.y2
+    ]
+    if not candidates:
+        return None
+    return min(
+        candidates,
+        key=lambda body_box: (body_box.cx - target_box.cx) ** 2 + (body_box.cy - target_box.cy) ** 2,
+    )
+
+def assign_phone_usage_to_bodies(target_boxes: List[Box], body_boxes: List[Box]) -> None:
+    best_target_by_body_index: Dict[int, Box] = {}
+
+    for body_box in body_boxes:
+        body_box.phone_confidence = -1.0
+        body_box.phone_state = -1
+        body_box.phone_label = ''
+        body_box.phone_class = -1
+        body_box.phone_probs = None
+
+    for target_box in target_boxes:
+        if target_box.phone_class is None or target_box.phone_class < 0 or target_box.phone_confidence < 0:
+            continue
+        body_box = find_body_for_phone_usage_target(target_box=target_box, body_boxes=body_boxes)
+        if body_box is None:
+            continue
+        body_index = next(
+            (index for index, candidate_body in enumerate(body_boxes) if candidate_body is body_box),
+            None,
+        )
+        if body_index is None:
+            continue
+        current_best = best_target_by_body_index.get(body_index)
+        if current_best is None or target_box.phone_confidence > current_best.phone_confidence:
+            best_target_by_body_index[body_index] = target_box
+
+    for body_index, target_box in best_target_by_body_index.items():
+        body_box = body_boxes[body_index]
+        body_box.phone_class = target_box.phone_class
+        body_box.phone_confidence = target_box.phone_confidence
+        body_box.phone_state = 1 if target_box.phone_class > 0 else 0
+        body_box.phone_label = PHONE_USAGE_LABELS.get(target_box.phone_class, f"class_{target_box.phone_class}")
+        body_box.phone_probs = list(target_box.phone_probs) if target_box.phone_probs is not None else None
 
 def is_parsable_to_int(s):
     try:
@@ -1034,7 +1210,7 @@ def draw_skeleton(
     #    （複数人のバウンディングボックスが重なっている場合は、
     #      先に見つかったものを採用、など適宜ルールを決める）
     # -------------------------------------------------
-    keypoint_ids = {21,22,23,24,25,29,30,31,32}
+    keypoint_ids = KEYPOINT_CLASS_IDS
     for box in boxes:
         if box.classid in keypoint_ids:
             box.person_id = -1
@@ -1121,14 +1297,14 @@ def main():
         '-m',
         '--model',
         type=str,
-        default='deimv2_dinov3_x_wholebody34_680query_n_batch_640x640.onnx',
-        help='ONNX/TFLite file path for DEIMv2.',
+        default='yolomit_t_wholebody28_1x3x480x640.onnx',
+        help='ONNX/TFLite file path for the YOLOMIT whole-body object detector.',
     )
     parser.add_argument(
         '-pm',
         '--puc_model',
         type=str,
-        default='puc_s_32x24.onnx',
+        default=DEFAULT_PUC_MODEL,
         help='ONNX file path for the PUC phone usage classifier.',
     )
     group_v_or_i = parser.add_mutually_exclusive_group(required=True)
@@ -1149,7 +1325,7 @@ def main():
         '--execution_provider',
         type=str,
         choices=['cpu', 'cuda', 'tensorrt'],
-        default='cpu',
+        default='cuda',
         help='Execution provider for ONNXRuntime.',
     )
     parser.add_argument(
@@ -1203,20 +1379,34 @@ def main():
             'The keypoint score threshold for object detection. Default: 0.30',
     )
     parser.add_argument(
-        '--body-long-history-size',
-        dest='body_long_history_size',
-        type=check_positive,
-        default=BODY_LONG_HISTORY_SIZE,
-        help=\
-            f'History length N for bbalg long tracking buffer. Default: {BODY_LONG_HISTORY_SIZE}',
+        '--phone-usage-target-class-id',
+        type=int,
+        default=PHONE_USAGE_TARGET_CLASS_ID,
+        help=f'Detector class ID used as the PUC phone usage target. Default: {PHONE_USAGE_TARGET_CLASS_ID}',
     )
     parser.add_argument(
-        '--body-short-history-size',
-        dest='body_short_history_size',
+        '--phone-usage-crop-expansion',
+        type=float,
+        default=PHONE_USAGE_CROP_EXPANSION,
+        help=f'Center-based expansion factor applied before cropping the PUC target. Default: {PHONE_USAGE_CROP_EXPANSION}',
+    )
+    parser.add_argument(
+        '--hand-long-history-size',
+        '--body-long-history-size',
+        dest='hand_long_history_size',
         type=check_positive,
-        default=BODY_SHORT_HISTORY_SIZE,
+        default=PHONE_USAGE_LONG_HISTORY_SIZE,
         help=\
-            f'History length M for bbalg short tracking buffer. Default: {BODY_SHORT_HISTORY_SIZE}',
+            f'History length N for phone usage long tracking buffer. Default: {PHONE_USAGE_LONG_HISTORY_SIZE}',
+    )
+    parser.add_argument(
+        '--hand-short-history-size',
+        '--body-short-history-size',
+        dest='hand_short_history_size',
+        type=check_positive,
+        default=PHONE_USAGE_SHORT_HISTORY_SIZE,
+        help=\
+            f'History length M for phone usage short tracking buffer. Default: {PHONE_USAGE_SHORT_HISTORY_SIZE}',
     )
     parser.add_argument(
         '-kdm',
@@ -1322,8 +1512,12 @@ def main():
             'Camera horizontal FOV. Default: 90',
     )
     args = parser.parse_args()
-    body_long_history_size = args.body_long_history_size
-    body_short_history_size = args.body_short_history_size
+    hand_long_history_size = args.hand_long_history_size
+    hand_short_history_size = args.hand_short_history_size
+    phone_usage_target_class_id = args.phone_usage_target_class_id
+    phone_usage_crop_expansion = args.phone_usage_crop_expansion
+    if phone_usage_crop_expansion <= 0:
+        raise ValueError('--phone-usage-crop-expansion must be positive.')
 
     # runtime check
     model_file: str = args.model
@@ -1419,7 +1613,7 @@ def main():
     pprint(providers)
 
     # Model initialization
-    model = DEIMv2(
+    model = WholeBodyDetector(
         runtime=runtime,
         model_path=model_file,
         obj_class_score_th=object_socre_threshold,
@@ -1427,7 +1621,7 @@ def main():
         keypoint_th=keypoint_threshold,
         providers=providers,
     )
-    sitting_classifier = PUCClassifier(
+    phone_usage_classifier = PUCClassifier(
         runtime='onnx',
         model_path=puc_model_file,
         providers=providers,
@@ -1460,18 +1654,18 @@ def main():
     white_line_width = bounding_box_line_width
     colored_line_width = white_line_width - 1
     tracker = SimpleSortTracker()
-    sitting_tracker = SimpleSortTracker()
+    phone_usage_tracker = SimpleSortTracker()
     track_color_cache: Dict[int, np.ndarray] = {}
-    body_state_histories: Dict[int, BodyStateHistory] = {}
+    phone_usage_state_histories: Dict[int, PhoneUsageStateHistory] = {}
 
-    def get_state_history(track_id: int) -> BodyStateHistory:
-        history = body_state_histories.get(track_id)
+    def get_state_history(track_id: int) -> PhoneUsageStateHistory:
+        history = phone_usage_state_histories.get(track_id)
         if history is None:
-            history = BodyStateHistory(BODY_LONG_HISTORY_SIZE, BODY_SHORT_HISTORY_SIZE)
-            body_state_histories[track_id] = history
+            history = PhoneUsageStateHistory(hand_long_history_size, hand_short_history_size)
+            phone_usage_state_histories[track_id] = history
         return history
 
-    def update_history_status(history: BodyStateHistory, candidate_class: int = -1) -> None:
+    def update_history_status(history: PhoneUsageStateHistory, candidate_class: int = -1) -> None:
         (
             state_interval_judgment,
             state_start_judgment,
@@ -1518,22 +1712,19 @@ def main():
         )
         elapsed_time = time.perf_counter() - start_time
         for box in boxes:
-            if box.classid != 0:
+            if box.classid != phone_usage_target_class_id:
                 continue
-            body_crop = crop_image_with_margin(
+            hand_crop = crop_image_with_expansion(
                 image=image,
                 box=box,
-                margin_top=0,
-                margin_bottom=0,
-                margin_left=0,
-                margin_right=0,
+                expansion=phone_usage_crop_expansion,
             )
-            if body_crop is None or body_crop.size == 0:
+            if hand_crop is None or hand_crop.size == 0:
                 box.phone_class = -1
                 continue
-            rgb_body_crop = cv2.cvtColor(body_crop, cv2.COLOR_BGR2RGB)
+            rgb_hand_crop = cv2.cvtColor(hand_crop, cv2.COLOR_BGR2RGB)
             try:
-                probs = sitting_classifier(image=rgb_body_crop)
+                probs = phone_usage_classifier(image=rgb_hand_crop)
             except Exception:
                 box.phone_class = -1
                 continue
@@ -1547,11 +1738,17 @@ def main():
             top_class = int(np.argmax(probs))
             confidence = float(probs[top_class])
             box.phone_class = top_class
-            box.body_prob_sitting = confidence
-            box.body_state = 1 if top_class > 0 else 0
+            box.phone_confidence = confidence
+            box.phone_state = 1 if top_class > 0 else 0
 
+        phone_usage_target_boxes = [box for box in boxes if box.classid == phone_usage_target_class_id]
         body_boxes = [box for box in boxes if box.classid == 0]
-        sitting_tracker.update(body_boxes)
+        assign_phone_usage_to_bodies(
+            target_boxes=phone_usage_target_boxes,
+            body_boxes=body_boxes,
+        )
+
+        phone_usage_tracker.update(body_boxes)
         for body_box in body_boxes:
             body_box.state_track_id = body_box.track_id
             body_box.track_id = -1
@@ -1559,8 +1756,8 @@ def main():
         for body_box in body_boxes:
             state_track_id = getattr(body_box, "state_track_id", -1)
             if state_track_id <= 0:
-                body_box.body_label = ''
-                body_box.body_state = 1 if (body_box.phone_class and body_box.phone_class > 0) else 0
+                body_box.phone_label = ''
+                body_box.phone_state = 1 if (body_box.phone_class and body_box.phone_class > 0) else 0
                 continue
             matched_track_ids.add(state_track_id)
             history = get_state_history(state_track_id)
@@ -1569,29 +1766,28 @@ def main():
             history.append(detection_state, predicted_class if predicted_class is not None else -1)
             update_history_status(history, predicted_class if predicted_class is not None else -1)
             if history.interval_active and history.label:
-                body_box.body_label = history.label
+                body_box.phone_label = history.label
                 body_box.phone_class = history.last_active_class or predicted_class
-                body_box.body_state = 1
+                body_box.phone_state = 1
             else:
-                body_box.body_label = ''
-                body_box.body_state = 0
+                body_box.phone_label = ''
+                body_box.phone_state = 0
 
-        current_track_ids = {track['id'] for track in sitting_tracker.tracks}
+        current_track_ids = {track['id'] for track in phone_usage_tracker.tracks}
         unmatched_track_ids = current_track_ids - matched_track_ids
         for track_id in unmatched_track_ids:
             history = get_state_history(track_id)
             history.append(False, history.last_active_class)
             update_history_status(history, history.last_active_class)
 
-        stale_history_ids = [track_id for track_id in list(body_state_histories.keys()) if track_id not in current_track_ids]
+        stale_history_ids = [track_id for track_id in list(phone_usage_state_histories.keys()) if track_id not in current_track_ids]
         for track_id in stale_history_ids:
-            body_state_histories.pop(track_id, None)
+            phone_usage_state_histories.pop(track_id, None)
 
         if file_paths is None:
             cv2.putText(debug_image, f'{elapsed_time*1000:.2f} ms', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
             cv2.putText(debug_image, f'{elapsed_time*1000:.2f} ms', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 1, cv2.LINE_AA)
 
-        body_boxes = [box for box in boxes if box.classid == 0]
         current_tracking_enabled = enable_tracking
         if current_tracking_enabled:
             if not tracking_enabled_prev:
@@ -1613,14 +1809,19 @@ def main():
         # Draw bounding boxes
         for box in boxes:
             classid: int = box.classid
+            is_phone_usage_target = classid == phone_usage_target_class_id
+            phone_label_active = classid == 0 and bool(box.phone_label)
             color = (255,255,255)
 
             if classid in disable_render_classids:
                 continue
 
             if classid == 0:
+                phone_color = PHONE_USAGE_COLORS.get(getattr(box, "phone_class", -1))
                 # Body
-                if not disable_gender_identification_mode:
+                if phone_label_active and phone_color is not None:
+                    color = phone_color
+                elif not disable_gender_identification_mode:
                     # Body
                     if box.gender == 0:
                         # Male
@@ -1630,10 +1831,13 @@ def main():
                         color = (139,116,225)
                     else:
                         # Unknown
-                        color = (0,200,255) if box.body_state == 1 else (0,0,255)
+                        color = (0,0,255)
                 else:
                     # Body
-                    color = (0,200,255) if box.body_state == 1 else (0,0,255)
+                    color = (0,0,255)
+            elif is_phone_usage_target:
+                # PUC phone usage target, normally Hand
+                color = (0,255,0)
             elif classid == 5:
                 # Body-With-Wheelchair
                 color = (0,200,255)
@@ -1663,46 +1867,23 @@ def main():
                 color = (203,192,255)
 
             elif classid == 21:
-                # Collarbone
-                color = (0,0,255)
-            elif classid == 22:
                 # Shoulder
                 color = (255,0,0)
-            elif classid == 23:
-                # Solar_plexus
-                color = (252,189,107)
-            elif classid == 24:
+            elif classid == 22:
                 # Elbow
                 color = (0,255,0)
-            elif classid == 25:
-                # Wrist
-                color = (0,0,255)
             elif classid == 26:
-                # Hand
-                color = (0,255,0)
-
-            elif classid == 29:
-                # abdomen
-                color = (0,0,255)
-            elif classid == 30:
-                # hip_joint
-                color = (255,0,0)
-            elif classid == 31:
                 # Knee
                 color = (0,0,255)
-            elif classid == 32:
-                # ankle
-                color = (255,0,0)
-
-            elif classid == 33:
+            elif classid == 27:
                 # Foot
                 color = (250,0,136)
 
             if (classid == 0 and not disable_gender_identification_mode) \
                 or (classid == 7 and not disable_headpose_identification_mode) \
-                or (classid == 26 and not disable_left_and_right_hand_identification_mode) \
+                or ((classid == HAND_CLASS_ID or is_phone_usage_target) and not disable_left_and_right_hand_identification_mode) \
                 or classid == 16 \
-                or classid in [21,22,23,24,25,29,30,31,32]:
+                or classid in KEYPOINT_CLASS_IDS:
 
                 # Body
                 if classid == 0:
@@ -1749,7 +1930,7 @@ def main():
                     cv2.rectangle(debug_image, (box.x1, box.y1), (box.x2, box.y2), color, colored_line_width)
 
                 # Hands
-                elif classid == 26:
+                elif classid == HAND_CLASS_ID or is_phone_usage_target:
                     if box.handedness == -1:
                         draw_dashed_rectangle(
                             image=debug_image,
@@ -1764,7 +1945,7 @@ def main():
                         cv2.rectangle(debug_image, (box.x1, box.y1), (box.x2, box.y2), color, colored_line_width)
 
                 # Shoulder, Elbow, Knee
-                elif classid in [21,22,23,24,25,29,30,31,32]:
+                elif classid in KEYPOINT_CLASS_IDS:
                     if keypoint_drawing_mode in ['dot', 'both']:
                         cv2.circle(debug_image, (box.cx, box.cy), 4, (255,255,255), -1)
                         cv2.circle(debug_image, (box.cx, box.cy), 3, color, -1)
@@ -1777,12 +1958,22 @@ def main():
                 cv2.rectangle(debug_image, (box.x1, box.y1), (box.x2, box.y2), color, colored_line_width)
 
             # TrackID text
+            track_text_right_x: Optional[int] = None
+            track_text_y: Optional[int] = None
             if enable_trackid_overlay and classid == 0 and box.track_id > 0:
                 track_text = f'ID: {box.track_id}'
                 text_x = max(box.x1 - 5, 0)
                 text_y = box.y1 - 30
                 if text_y < 20:
                     text_y = min(box.y2 + 25, debug_image_h - 10)
+                track_text_size, _ = cv2.getTextSize(
+                    track_text,
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    1,
+                )
+                track_text_right_x = text_x + track_text_size[0]
+                track_text_y = text_y
                 cached_color = track_color_cache.get(box.track_id)
                 if isinstance(cached_color, np.ndarray):
                     text_color = tuple(int(np.clip(v, 0, 255)) for v in cached_color.tolist())
@@ -1830,12 +2021,9 @@ def main():
 
             headpose_txt = BOX_COLORS[box.head_pose][1] if box.head_pose != -1 else ''
             attr_txt = f'{attr_txt} {headpose_txt}' if headpose_txt != '' else f'{attr_txt}'
-            phone_label_active = classid == 0 and bool(box.body_label)
             if classid == 0:
                 if phone_label_active:
-                    attr_txt = f'{box.body_label} {box.body_prob_sitting:.3f}'
-                else:
-                    attr_txt = ''
+                    attr_txt = f'{box.phone_label} {box.phone_confidence:.3f}'
 
             attr_color = (
                 PHONE_USAGE_COLORS.get(getattr(box, "phone_class", -1), color)
@@ -1843,13 +2031,25 @@ def main():
                 else color
             )
             if attr_txt:
+                attr_x = box.x1 if box.x1+50 < debug_image_w else debug_image_w-50
+                attr_y = box.y1-10 if box.y1-25 > 0 else 20
+                if phone_label_active and track_text_right_x is not None and track_text_y is not None:
+                    attr_text_size, _ = cv2.getTextSize(
+                        attr_txt,
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        1,
+                    )
+                    preferred_attr_x = track_text_right_x + 10
+                    if preferred_attr_x + attr_text_size[0] <= debug_image_w - 2:
+                        attr_x = preferred_attr_x
+                    else:
+                        attr_x = max(0, debug_image_w - attr_text_size[0] - 2)
+                    attr_y = track_text_y
                 cv2.putText(
                     debug_image,
                     f'{attr_txt}',
-                    (
-                        box.x1 if box.x1+50 < debug_image_w else debug_image_w-50,
-                        box.y1-10 if box.y1-25 > 0 else 20
-                    ),
+                    (attr_x, attr_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.7,
                     (255, 255, 255),
@@ -1859,10 +2059,7 @@ def main():
                 cv2.putText(
                     debug_image,
                     f'{attr_txt}',
-                    (
-                        box.x1 if box.x1+50 < debug_image_w else debug_image_w-50,
-                        box.y1-10 if box.y1-25 > 0 else 20
-                    ),
+                    (attr_x, attr_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.7,
                     attr_color,
@@ -1877,12 +2074,13 @@ def main():
                 handedness_txt = 'L'
             elif box.handedness == 1:
                 handedness_txt = 'R'
+            handedness_y = box.y1 - 10 if box.y1 - 25 > 0 else 20
             cv2.putText(
                 debug_image,
                 f'{handedness_txt}',
                 (
                     box.x1 if box.x1+50 < debug_image_w else debug_image_w-50,
-                    box.y1-10 if box.y1-25 > 0 else 20
+                    handedness_y
                 ),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
@@ -1895,7 +2093,7 @@ def main():
                 f'{handedness_txt}',
                 (
                     box.x1 if box.x1+50 < debug_image_w else debug_image_w-50,
-                    box.y1-10 if box.y1-25 > 0 else 20
+                    handedness_y
                 ),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,

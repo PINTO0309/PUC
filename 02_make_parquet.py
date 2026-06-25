@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert annotation CSV into a parquet dataset consumable by puc.data."""
+"""Convert labeled image folders under data/ into a parquet dataset."""
 
 from __future__ import annotations
 
@@ -7,43 +7,35 @@ import argparse
 import random
 import sys
 from collections import Counter
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
-from typing import Dict
+from typing import Iterable
 
+import matplotlib.pyplot as plt
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_ANNOTATION_FILE = ROOT / "data" / "annotation.txt"
-DEFAULT_IMAGE_DIR = ROOT / "data" / "images"
-DEFAULT_OUTPUT_FILE = ROOT / "data" / "dataset.parquet"
+DEFAULT_DATA_DIR = ROOT / "data"
+DEFAULT_OUTPUT_FILE = DEFAULT_DATA_DIR / "dataset.parquet"
+DEFAULT_CLASS_PIE_FILE = DEFAULT_DATA_DIR / "class_distribution.png"
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 LABEL_MAP = {
     0: "no_action",
-    1: "point",
-    2: "point_somewhere",
+    1: "point_somewhere",
+    2: "point",
 }
-LEGACY_CLASS_MAP = {
-    0: 0,
-    2: 1,
-    3: 2,
-}
-LEGACY_SUPPORTED_IDS = set(LEGACY_CLASS_MAP.keys()) | {1}
+CLASS_NAME_TO_ID = {label: class_id for class_id, label in LABEL_MAP.items()}
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate dataset.parquet for three-class phone usage classification.",
+        description="Generate dataset.parquet from data/<label> image folders.",
     )
     parser.add_argument(
-        "--annotation-file",
+        "--data-dir",
         type=Path,
-        default=DEFAULT_ANNOTATION_FILE,
-        help=f"Annotation CSV with filename,video_id,timestamp,person_id,class_id (default: {DEFAULT_ANNOTATION_FILE})",
-    )
-    parser.add_argument(
-        "--image-dir",
-        type=Path,
-        default=DEFAULT_IMAGE_DIR,
-        help=f"Directory containing cropped images (default: {DEFAULT_IMAGE_DIR})",
+        default=DEFAULT_DATA_DIR,
+        help=f"Directory containing label folders (default: {DEFAULT_DATA_DIR})",
     )
     parser.add_argument(
         "--output",
@@ -51,21 +43,24 @@ def _parse_args() -> argparse.Namespace:
         default=DEFAULT_OUTPUT_FILE,
         help=f"Destination parquet file (default: {DEFAULT_OUTPUT_FILE})",
     )
-    parser.add_argument("--train-ratio", type=float, default=0.8, help="Target ratio for the training split.")
-    parser.add_argument("--val-ratio", type=float, default=0.2, help="Target ratio for the validation split.")
-    parser.add_argument("--seed", type=int, default=42, help="Seed controlling random split assignment.")
+    parser.add_argument("--train-ratio", type=float, default=0.9, help="Target ratio for the training split.")
+    parser.add_argument("--val-ratio", type=float, default=0.1, help="Target ratio for the validation split.")
+    parser.add_argument("--seed", type=int, default=42, help="Seed controlling deterministic split assignment.")
     parser.add_argument(
-        "--annotation-schema",
-        choices=("current", "legacy"),
-        default="current",
-        help="Interpretation of class_id values inside the annotation file. "
-        "Use 'legacy' for the previous four-class files (call rows are dropped, "
-        "point/point_somewhere are remapped to IDs 1/2).",
+        "--class-pie-file",
+        type=Path,
+        default=DEFAULT_CLASS_PIE_FILE,
+        help=f"PNG path for a class distribution pie chart generated from the parquet (default: {DEFAULT_CLASS_PIE_FILE})",
     )
     parser.add_argument(
-        "--embed-images",
+        "--pie-only",
         action="store_true",
-        help="Store raw image bytes inside the parquet (increases file size but removes disk dependency).",
+        help="Only read the parquet specified by --output and write the class distribution pie chart.",
+    )
+    parser.add_argument(
+        "--no-embed-images",
+        action="store_true",
+        help="Store image paths only instead of embedding raw image bytes in the parquet.",
     )
     parser.add_argument(
         "--overwrite",
@@ -75,130 +70,24 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _load_annotations(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(f"Annotation file not found: {path}")
-
-    df = pd.read_csv(
-        path,
-        header=None,
-        names=["filename", "video_id", "timestamp", "person_id", "class_id"],
-        dtype=str,
-    )
-    df = df.dropna(how="all")
-    if df.empty:
-        raise RuntimeError(f"No rows found in {path}")
-
-    for column in ("filename", "video_id", "timestamp"):
-        df[column] = df[column].astype(str).str.strip()
-    df["person_id"] = pd.to_numeric(df["person_id"], errors="raise").astype(int)
-    df["class_id"] = pd.to_numeric(df["class_id"], errors="raise").astype(int)
-    df = df[df["filename"] != ""]
-    if df.empty:
-        raise RuntimeError("Annotation file does not contain usable filename entries.")
-    return df
-
-
-def _build_image_index(image_dir: Path) -> Dict[str, Path]:
-    if not image_dir.exists():
-        raise FileNotFoundError(f"Image directory not found: {image_dir}")
-    entries: Dict[str, Path] = {}
-    for path in sorted(image_dir.rglob("*")):
-        if not path.is_file():
-            continue
-        name = path.name
-        resolved = path.resolve()
-        if name in entries:
-            conflict_a = entries[name]
-            raise RuntimeError(
-                f"Duplicate filename {name!r} encountered under {conflict_a} and {resolved}. "
-                "Filenames must be unique."
-            )
-        entries[name] = resolved
-    if not entries:
-        raise RuntimeError(f"No image files found under {image_dir}")
-    return entries
-
-
-def _normalize_ratios(train_ratio: float, val_ratio: float) -> Dict[str, float]:
+def _validate_ratios(train_ratio: float, val_ratio: float) -> None:
     if train_ratio <= 0:
         raise ValueError("train-ratio must be greater than zero.")
     if val_ratio < 0:
         raise ValueError("val-ratio must be non-negative.")
-    total = train_ratio + val_ratio
-    if total <= 0:
-        raise ValueError("At least one of the split ratios must be positive.")
-    return {
-        "train": train_ratio / total,
-        "val": val_ratio / total,
-    }
+    if train_ratio + val_ratio <= 0:
+        raise ValueError("At least one split ratio must be positive.")
 
 
-def _normalize_class_ids(df: pd.DataFrame, schema: str) -> pd.DataFrame:
-    df = df.copy()
-    if schema == "legacy":
-        invalid_ids = sorted(set(df["class_id"].unique()) - LEGACY_SUPPORTED_IDS)
-        if invalid_ids:
-            raise ValueError(
-                f"Annotation file contains unsupported class_id values for the legacy schema: {invalid_ids}."
-            )
-        drop_mask = df["class_id"] == 1
-        if drop_mask.any():
-            print(
-                f"[warn] Dropping {int(drop_mask.sum())} legacy call annotations from the dataset.",
-                file=sys.stderr,
-            )
-            df = df[~drop_mask]
-        if df.empty:
-            raise RuntimeError("No annotation rows remain after removing the call class.")
-        df["class_id"] = df["class_id"].map(LEGACY_CLASS_MAP)
-        if df["class_id"].isna().any():
-            bad_rows = sorted(df.loc[df["class_id"].isna(), "class_id"].unique())
-            raise ValueError(f"Unmapped legacy class_id values encountered: {bad_rows}")
-        df["class_id"] = df["class_id"].astype(int)
-        return df
-
-    allowed_ids = set(LABEL_MAP.keys())
-    invalid_ids = sorted(set(df["class_id"].unique()) - allowed_ids)
-    if invalid_ids:
-        raise ValueError(
-            f"Annotation file contains unsupported class_id values: {invalid_ids}. "
-            "Did you mean to run with --annotation-schema legacy?"
-        )
-    return df
+def _half_up_count(total: int, numerator: float, denominator: float) -> int:
+    value = Decimal(total) * Decimal(str(numerator)) / Decimal(str(denominator))
+    return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
-def _assign_row_splits(count: int, ratios: Dict[str, float], seed: int) -> list[str]:
-    if count <= 0:
-        raise RuntimeError("Annotation file does not contain any usable rows.")
-    rng = random.Random(seed)
-    ordered_splits = list(ratios.keys())
-    thresholds = []
-    cumulative = 0.0
-    for split in ordered_splits:
-        cumulative += ratios[split]
-        thresholds.append((split, cumulative))
-    assignments: list[str] = []
-    for _ in range(count):
-        value = rng.random()
-        for split, cutoff in thresholds:
-            if value <= cutoff:
-                assignments.append(split)
-                break
-        else:
-            assignments.append(ordered_splits[-1])
-    return assignments
-
-
-def _summarize(df: pd.DataFrame) -> None:
-    split_counts = Counter(df["split"])
-    label_counts = Counter(df["label"])
-    print("Split counts:")
-    for split in ("train", "val"):
-        print(f"  {split:>5}: {split_counts.get(split, 0)}")
-    print("Label counts:")
-    for label in LABEL_MAP.values():
-        print(f"  {label:>16}: {label_counts.get(label, 0)}")
+def _iter_images(label_dir: Path) -> Iterable[Path]:
+    for path in sorted(label_dir.rglob("*")):
+        if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES:
+            yield path
 
 
 def _format_image_path(path: Path, dataset_root: Path) -> str:
@@ -206,26 +95,6 @@ def _format_image_path(path: Path, dataset_root: Path) -> str:
         return path.resolve().relative_to(dataset_root).as_posix()
     except ValueError:
         return str(path.resolve())
-
-
-def _attach_image_paths(df: pd.DataFrame, image_index: Dict[str, Path], dataset_root: Path) -> pd.DataFrame:
-    df = df.copy()
-    resolved_col = "_resolved_image_path"
-    df[resolved_col] = df["filename"].map(image_index)
-    missing_mask = df[resolved_col].isna()
-    if missing_mask.any():
-        missing_files = sorted(df.loc[missing_mask, "filename"].unique())
-        preview = ", ".join(missing_files[:10])
-        print(
-            f"[warn] Dropping {missing_mask.sum()} rows because the corresponding images were not found. "
-            f"Examples: {preview}",
-            file=sys.stderr,
-        )
-        df = df[~missing_mask]
-    if df.empty:
-        raise RuntimeError("No annotation rows remain after resolving image paths.")
-    df["image_path"] = df[resolved_col].apply(lambda path: _format_image_path(path, dataset_root))
-    return df
 
 
 def _read_image_bytes(path: Path) -> bytes:
@@ -237,48 +106,168 @@ def _read_image_bytes(path: Path) -> bytes:
         raise RuntimeError(f"Failed to read {path}: {exc}") from exc
 
 
+def _warn_unknown_label_dirs(data_dir: Path) -> None:
+    known_labels = set(CLASS_NAME_TO_ID)
+    unknown_dirs = sorted(path.name for path in data_dir.iterdir() if path.is_dir() and path.name not in known_labels)
+    if unknown_dirs:
+        print(
+            f"[warn] Ignoring unknown label directories under {data_dir}: {', '.join(unknown_dirs)}",
+            file=sys.stderr,
+        )
+
+
+def _build_rows_for_label(
+    *,
+    label_name: str,
+    class_id: int,
+    data_dir: Path,
+    output_root: Path,
+    train_ratio: float,
+    val_ratio: float,
+    seed: int,
+    embed_images: bool,
+) -> list[dict[str, object]]:
+    label_dir = data_dir / label_name
+    if not label_dir.is_dir():
+        raise FileNotFoundError(f"Label directory not found: {label_dir}")
+
+    image_paths = list(_iter_images(label_dir))
+    if not image_paths:
+        raise RuntimeError(f"No supported image files found under {label_dir}")
+
+    rng = random.Random(seed + class_id)
+    rng.shuffle(image_paths)
+
+    ratio_total = train_ratio + val_ratio
+    val_count = _half_up_count(len(image_paths), val_ratio, ratio_total)
+    split_by_path = {
+        path: "val" if index < val_count else "train"
+        for index, path in enumerate(image_paths)
+    }
+
+    rows: list[dict[str, object]] = []
+    for path in sorted(image_paths):
+        try:
+            source = path.parent.resolve().relative_to(data_dir.resolve()).as_posix()
+        except ValueError:
+            source = path.parent.name
+
+        row: dict[str, object] = {
+            "split": split_by_path[path],
+            "image_path": _format_image_path(path, output_root),
+            "class_id": class_id,
+            "label": label_name,
+            "source": source,
+            "filename": path.name,
+        }
+        if embed_images:
+            row["image_bytes"] = _read_image_bytes(path)
+        rows.append(row)
+
+    return rows
+
+
 def build_dataset(args: argparse.Namespace) -> pd.DataFrame:
-    annotation_df = _load_annotations(args.annotation_file)
-    annotation_df = _normalize_class_ids(annotation_df, args.annotation_schema)
+    data_dir = args.data_dir.resolve()
+    if not data_dir.is_dir():
+        raise FileNotFoundError(f"Data directory not found: {data_dir}")
+
+    _validate_ratios(args.train_ratio, args.val_ratio)
     output_root = args.output.resolve().parent
     output_root.mkdir(parents=True, exist_ok=True)
-    image_index = _build_image_index(args.image_dir)
-    ratio_map = _normalize_ratios(args.train_ratio, args.val_ratio)
-    dataset_df = _attach_image_paths(annotation_df, image_index, output_root)
+    _warn_unknown_label_dirs(data_dir)
 
-    dataset_df["split"] = _assign_row_splits(len(dataset_df), ratio_map, args.seed)
-    dataset_df["source"] = dataset_df["video_id"]
-    dataset_df["label"] = dataset_df["class_id"].map(LABEL_MAP)
-    if dataset_df["label"].isna().any():
-        bad_values = sorted(dataset_df.loc[dataset_df["label"].isna(), "class_id"].unique())
-        raise ValueError(f"Unsupported class_id values detected: {bad_values}")
+    embed_images = not args.no_embed_images
+    rows: list[dict[str, object]] = []
+    for class_id, label_name in LABEL_MAP.items():
+        rows.extend(
+            _build_rows_for_label(
+                label_name=label_name,
+                class_id=class_id,
+                data_dir=data_dir,
+                output_root=output_root,
+                train_ratio=args.train_ratio,
+                val_ratio=args.val_ratio,
+                seed=args.seed,
+                embed_images=embed_images,
+            )
+        )
 
-    resolved_col = "_resolved_image_path"
-    if args.embed_images:
-        dataset_df["image_bytes"] = dataset_df[resolved_col].apply(_read_image_bytes)
-    dataset_df = dataset_df.drop(columns=[resolved_col])
+    if not rows:
+        raise RuntimeError(f"No dataset rows were produced from {data_dir}")
 
-    ordered_columns = [
-        "split",
-        "image_path",
-        "class_id",
-        "label",
-        "source",
-        "filename",
-        "video_id",
-        "timestamp",
-        "person_id",
-    ]
-    if "image_bytes" in dataset_df.columns:
+    ordered_columns = ["split", "image_path", "class_id", "label", "source", "filename"]
+    if embed_images:
         ordered_columns.insert(2, "image_bytes")
+
+    dataset_df = pd.DataFrame(rows)
     dataset_df = dataset_df[ordered_columns]
-    dataset_df = dataset_df.sort_values(["split", "video_id", "timestamp", "person_id"]).reset_index(drop=True)
-    return dataset_df
+    return dataset_df.sort_values(["split", "class_id", "source", "filename"]).reset_index(drop=True)
+
+
+def _summarize(df: pd.DataFrame) -> None:
+    split_counts = Counter(df["split"])
+    label_counts = Counter(df["label"])
+    split_label_counts = Counter(zip(df["split"], df["label"]))
+
+    print("Split counts:")
+    for split in ("train", "val"):
+        print(f"  {split:>5}: {split_counts.get(split, 0)}")
+
+    print("Label counts:")
+    for label in LABEL_MAP.values():
+        print(f"  {label:>16}: {label_counts.get(label, 0)}")
+
+    print("Split/label counts:")
+    for split in ("train", "val"):
+        for label in LABEL_MAP.values():
+            print(f"  {split:>5} {label:>16}: {split_label_counts.get((split, label), 0)}")
+
+
+def _load_parquet_class_counts(parquet_path: Path) -> Counter[int]:
+    if not parquet_path.exists():
+        raise FileNotFoundError(f"Dataset parquet not found: {parquet_path}")
+    df = pd.read_parquet(parquet_path, columns=["class_id"])
+    if df.empty:
+        return Counter()
+    return Counter(int(value) for value in df["class_id"].dropna())
+
+
+def save_class_distribution_pie_from_parquet(parquet_path: Path, output_path: Path) -> None:
+    counts = _load_parquet_class_counts(parquet_path)
+    if not counts:
+        print("[pie] No parquet rows available; skipping pie chart.")
+        return
+
+    labels = []
+    sizes = []
+    for class_id, count in sorted(counts.items()):
+        label = LABEL_MAP.get(class_id, str(class_id))
+        labels.append(f"{label} ({count})")
+        sizes.append(count)
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.pie(
+        sizes,
+        labels=labels,
+        autopct=lambda pct: f"{pct:.1f}%",
+        startangle=90,
+        counterclock=False,
+    )
+    ax.axis("equal")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[pie] Saved class distribution chart to {output_path}")
 
 
 def main() -> None:
     args = _parse_args()
     output = args.output
+    if args.pie_only:
+        save_class_distribution_pie_from_parquet(output, args.class_pie_file)
+        return
+
     if output.exists() and not args.overwrite:
         raise FileExistsError(f"{output} already exists; use --overwrite to replace it.")
 
@@ -286,6 +275,7 @@ def main() -> None:
     dataset_df.to_parquet(output, index=False)
     print(f"Wrote {output} ({len(dataset_df)} rows).")
     _summarize(dataset_df)
+    save_class_distribution_pie_from_parquet(output, args.class_pie_file)
 
 
 if __name__ == "__main__":

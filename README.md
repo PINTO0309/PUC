@@ -2,30 +2,29 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17666420.svg)](https://doi.org/10.5281/zenodo.17666420) ![GitHub License](https://img.shields.io/github/license/pinto0309/PUC)
  [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/PINTO0309/puc)
 
-Phone Usage Classifier (PUC) is a three-class image classification pipeline for understanding how people
-interact with smartphones. **Perhaps the model is looking at our `hands`, not our `smartphones`. This model is a complete failure, but it shows how humans fail to look at the small details when making judgments.**
+Phone Usage Classifier (PUC) is a three-class image classification pipeline for understanding how people interact with smartphones.
 
 - `classid=0` (`no_action`): No interaction with a smartphone.
-- `classid=1` (`point`): Pointing the smartphone towards the camera.
-- `classid=2` (`point_somewhere`): Pointing the smartphone somewhere other than the camera.
+- `classid=1` (`point_somewhere`): Pointing the smartphone somewhere other than the camera.
+- `classid=2` (`point`): Pointing the smartphone towards the camera.
 
-https://github.com/user-attachments/assets/18acf290-63b6-40ba-a38c-a5712dedc19c
+https://github.com/user-attachments/assets/77b3a510-8c54-480a-a8f0-1e4c185cabd0
 
 |Variant|Size|F1|CPU<br>inference<br>latency|ONNX|
 |:-:|:-:|:-:|:-:|:-:|
-|P|115 KB|0.9628|0.13 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_p_32x24.onnx)|
-|N|176 KB|0.9754|0.24 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_n_32x24.onnx)|
-|T|280 KB|0.9923|0.31 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_t_32x24.onnx)|
-|S|495 KB|0.9975|0.35 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_s_32x24.onnx)|
-|C|876 KB|0.9979|0.47 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_c_32x24.onnx)|
-|M|1.7 MB|0.9985|0.55 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_m_32x24.onnx)|
-|L|6.4 MB|0.9986|0.73 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_l_32x24.onnx)|
+|P|115 KB|0.9160| 0.24 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_p_48x48.onnx)|
+|N|176 KB|0.9337| 0.39 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_n_48x48.onnx)|
+|T|280 KB|0.9468| 0.51 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_t_48x48.onnx)|
+|S|495 KB|0.9672| 0.66 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_s_48x48.onnx)|
+|C|876 KB|0.9722| 0.73 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_c_48x48.onnx)|
+|M|1.7 MB|0.9774| 0.86 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_m_48x48.onnx)|
+|L|6.4 MB|0.9944| 1.07 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_l_48x48.onnx)|
 
 ## Data sample
 
-|1|2|3|4|
-|:-:|:-:|:-:|:-:|
-|<img width="24" height="32" alt="000000084193_022002_0" src="https://github.com/user-attachments/assets/9e661b3d-f5ee-4a4a-bcee-8d28d6ac020a" />|<img width="24" height="32" alt="no_action1_004005_0" src="https://github.com/user-attachments/assets/5e26aa1d-f849-47d2-ae73-88ec2c4bedd9" />|<img width="24" height="32" alt="point1_001301_1" src="https://github.com/user-attachments/assets/fe84a427-8d86-45f1-b77e-e4d6778b1a23" />|<img width="24" height="32" alt="point_somewhere4_000156_2" src="https://github.com/user-attachments/assets/3682f7e5-26a0-4e70-a38b-93c60c3f5a31" />|
+|no<br>action|no<br>action|point<br>somewhere|point<br>somewhere|point|point|
+|:-:|:-:|:-:|:-:|:-:|:-:|
+<img width="48" height="48" alt="no_action_008364" src="https://github.com/user-attachments/assets/327c71a0-c636-4ea9-8700-ed5a28a0050e" />|<img width="48" height="48" alt="no_action_008001" src="https://github.com/user-attachments/assets/9d080aa1-fc47-4c83-85a6-9e1f1fa087b8" />|<img width="48" height="48" alt="point_somewhere_002145" src="https://github.com/user-attachments/assets/2d816974-3ddd-4d2c-ae61-0df6cbe5c14f" />|<img width="48" height="48" alt="point_somewhere_002068" src="https://github.com/user-attachments/assets/108d9652-0c07-47f0-8b34-428ee5f23dfa" />|<img width="48" height="48" alt="point_003496" src="https://github.com/user-attachments/assets/0bc4d7bd-e85e-43f9-a893-dbbb070f46da" />|<img width="48" height="48" alt="point_003008" src="https://github.com/user-attachments/assets/cbf23eed-5ded-4709-8e7a-0cc8eab920eb" />|
 
 ## Setup
 
@@ -40,13 +39,13 @@ source .venv/bin/activate
 ```bash
 uv run python demo_puc.py \
 -v 0 \
--pm puc_l_32x24.onnx \
+-pm puc_l_48x48.onnx \
 -dlr -dnm -dgm -dhm \
 -ep cuda
 
 uv run python demo_puc.py \
 -v 0 \
--pm puc_l_32x24.onnx \
+-pm puc_l_48x48.onnx \
 -dlr -dnm -dgm -dhm \
 -ep tensorrt
 ```
@@ -61,24 +60,24 @@ uv run python 01_data_prep_realdata.py \
 --start-folder 1001 \
 --allow-multi-body
 
-uv run python 02_make_parquet.py --embed-images
+uv run python 02_make_parquet.py --overwrite
 ```
 ```
 Split counts:
-  train: 51240
-    val: 12818
+  train: 23988
+    val: 2667
 Label counts:
-         no_action: 42909
-             point: 11545
-   point_somewhere: 9604
+         no_action: 8885
+   point_somewhere: 8885
+             point: 8885
 ```
 
-<img width="673" height="482" alt="class_distribution" src="https://github.com/user-attachments/assets/60d8e828-f2ff-49f2-aa41-6d611e29cb2a" />
+<img width="600" alt="class_distribution" src="https://github.com/user-attachments/assets/35622164-f354-4491-9847-d7d54f1a5e42" />
 
 ## Training Pipeline
 
-- Use the images located under `dataset/output/002_xxxx_front_yyyyyy` together with their annotations in `dataset/output/002_xxxx_front.csv`.
-- Every augmented image that originates from the same `still_image` stays in the same split to prevent leakage.
+- Use the labeled image folders under `data/no_action`, `data/point_somewhere`, and `data/point`.
+- `02_make_parquet.py` writes pre-defined train/val splits into `data/dataset.parquet` using an image-level 9:1 split per class.
 - The training loop relies on `BCEWithLogitsLoss` plus class-balanced `pos_weight` to stabilise optimisation under class imbalance; inference produces sigmoid probabilities. Use `--train_resampling weighted` to switch on the previous `WeightedRandomSampler` behaviour, or `--train_resampling balanced` to physically duplicate minority classes before shuffling.
 - Training history, validation metrics, optional test predictions, checkpoints, configuration JSON, and ONNX exports are produced automatically.
 - Per-epoch checkpoints named like `puc_epoch_0001.pt` are retained (latest 10), as well as the best checkpoints named `puc_best_epoch0004_f1_0.9321.pt` (also latest 10).
@@ -88,7 +87,7 @@ Label counts:
   |------------------|-----------------------------|---------------------------|------|
   | `baseline`       | `avg`                       | `avg`, `avgmax_mlp`       | When using `transformer`/`mlp_mixer`, you need to adjust the height and width of the feature map so that they are divisible by `--token_mixer_grid` (if left as is, an exception will occur during ONNX conversion or inference). |
   | `inverted_se`    | `avgmax_mlp`                | `avg`, `avgmax_mlp`       | When using `transformer`/`mlp_mixer`, it is necessary to adjust `--token_mixer_grid` as above. |
-  | `convnext`       | `transformer`               | `avg`, `avgmax_mlp`, `transformer`, `mlp_mixer` | For both heads, the grid must be divisible by the feature map (default `3x2` fits with 30x48 input). |
+  | `convnext`       | `transformer`               | `avg`, `avgmax_mlp`, `transformer`, `mlp_mixer` | For token mixer heads, the feature map dimensions must be divisible by `--token_mixer_grid` (default `2x3`). |
 - The classification head is selected with `--head_variant` (`avg`, `avgmax_mlp`, `transformer`, `mlp_mixer`, or `auto` which derives a sensible default from the backbone).
 - Pass `--rgb_to_yuv_to_y` to convert RGB crops to YUV, keep only the Y (luma) channel inside the network, and train a single-channel stem without modifying the dataloader.
 - Alternatively, use `--rgb_to_lab` or `--rgb_to_luv` to convert inputs to CIE Lab/Luv (3-channel) before the stem; these options are mutually exclusive with each other and with `--rgb_to_yuv_to_y`.
@@ -99,7 +98,7 @@ Label counts:
 Baseline depthwise-separable CNN:
 
 ```bash
-SIZE=32x24
+SIZE=48x48
 uv run python -m puc train \
 --data_root data/dataset.parquet \
 --output_dir runs/puc_${SIZE} \
@@ -118,7 +117,7 @@ uv run python -m puc train \
 Inverted residual + SE variant (recommended for higher capacity):
 
 ```bash
-SIZE=32x24
+SIZE=48x48
 VAR=s
 uv run python -m puc train \
 --data_root data/dataset.parquet \
@@ -140,7 +139,7 @@ uv run python -m puc train \
 ConvNeXt-style backbone with transformer head over pooled tokens:
 
 ```bash
-SIZE=32x24
+SIZE=48x48
 uv run python -m puc train \
 --data_root data/dataset.parquet \
 --output_dir runs/puc_convnext_${SIZE} \
@@ -171,8 +170,8 @@ uv run python -m puc train \
 
 ```bash
 uv run python -m puc exportonnx \
---checkpoint runs/puc_is_s_32x24/puc_best_epoch0049_f1_0.9939.pt \
---output puc_s_32x24.onnx \
+--checkpoint runs/puc_is_s_48x48/puc_best_epoch0049_f1_0.9939.pt \
+--output puc_s_48x48.onnx \
 --opset 17
 ```
 
@@ -181,7 +180,7 @@ uv run python -m puc exportonnx \
 
 ## Arch
 
-<img width="350" alt="puc_p_32x24" src="https://github.com/user-attachments/assets/82fd2a31-d6b5-4bbb-a099-ac51237d145c" />
+<img width="350" alt="puc_p_48x48" src="https://github.com/user-attachments/assets/4f4bacfd-5ac1-4af6-a68b-379377f3dc49" />
 
 ## Ultra-lightweight classification model series
 1. [VSDLM: Visual-only speech detection driven by lip movements](https://github.com/PINTO0309/VSDLM) - MIT License
@@ -227,4 +226,3 @@ interact with smartphones.},
   }
   ```
 - https://github.com/PINTO0309/bbalg: MIT License
-

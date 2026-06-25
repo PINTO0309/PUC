@@ -46,6 +46,7 @@ from .model import ModelConfig, PUC
 LOGGER = logging.getLogger("puc")
 
 LABEL_MAP = dict(CLASS_ID_TO_NAME)
+DEFAULT_IMAGE_SIZE = (48, 48)
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _DEIM_MODULE_PATH = _REPO_ROOT / "03_wholebody34_data_extractor.py"
@@ -326,7 +327,7 @@ class TrainConfig:
     lr: float = 1e-4
     weight_decay: float = 1e-4
     num_workers: int = 8
-    image_size: tuple[int, int] = (112, 112)
+    image_size: tuple[int, int] = DEFAULT_IMAGE_SIZE
     train_ratio: float = 0.8
     val_ratio: float = 0.2
     test_ratio: float = 0.0
@@ -1211,12 +1212,12 @@ def predict_images(
     normalization = checkpoint["normalization"]
     mean = normalization.get("mean", DEFAULT_MEAN)
     std = normalization.get("std", DEFAULT_STD)
-    image_size_raw = normalization.get("image_size", (112, 112))
+    image_size_raw = normalization.get("image_size", DEFAULT_IMAGE_SIZE)
     try:
         image_size = _ensure_image_size_tuple(image_size_raw)
     except ValueError:
-        LOGGER.warning("Invalid image_size %s in checkpoint; defaulting to 112x112.", image_size_raw)
-        image_size = (112, 112)
+        LOGGER.warning("Invalid image_size %s in checkpoint; defaulting to 48x48.", image_size_raw)
+        image_size = DEFAULT_IMAGE_SIZE
     _, eval_transform = _build_transforms(image_size, mean, std)
 
     image_paths = _gather_image_paths(inputs)
@@ -1265,12 +1266,12 @@ def run_webcam_inference(
     normalization = checkpoint["normalization"]
     mean = normalization.get("mean", DEFAULT_MEAN)
     std = normalization.get("std", DEFAULT_STD)
-    image_size_raw = normalization.get("image_size", (112, 112))
+    image_size_raw = normalization.get("image_size", DEFAULT_IMAGE_SIZE)
     try:
         image_size = _ensure_image_size_tuple(image_size_raw)
     except ValueError:
-        LOGGER.warning("Invalid image_size %s in checkpoint; defaulting to 112x112.", image_size_raw)
-        image_size = (112, 112)
+        LOGGER.warning("Invalid image_size %s in checkpoint; defaulting to 48x48.", image_size_raw)
+        image_size = DEFAULT_IMAGE_SIZE
     _, eval_transform = _build_transforms(image_size, mean, std)
 
     detector_path = Path(detector_model) if detector_model is not None else _DEFAULT_DETECTOR_MODEL
@@ -1440,10 +1441,10 @@ def run_webcam_inference_onnx(
             width = int(input_shape[3])
         else:
             LOGGER.warning(
-                "ONNX model has dynamic spatial dimensions; defaulting to 112x112. "
+                "ONNX model has dynamic spatial dimensions; defaulting to 48x48. "
                 "Override with --image_size HEIGHTxWIDTH if needed."
             )
-            height, width = (112, 112)
+            height, width = DEFAULT_IMAGE_SIZE
     _, eval_transform = _build_transforms((height, width), DEFAULT_MEAN, DEFAULT_STD)
 
     detector_path = Path(detector_model) if detector_model is not None else _DEFAULT_DETECTOR_MODEL
@@ -1588,12 +1589,12 @@ def export_to_onnx(
     model.eval()
 
     normalization = checkpoint["normalization"]
-    image_size_raw = normalization.get("image_size", (112, 112))
+    image_size_raw = normalization.get("image_size", DEFAULT_IMAGE_SIZE)
     try:
         image_size = _ensure_image_size_tuple(image_size_raw)
     except ValueError:
-        LOGGER.warning("Invalid image_size %s in checkpoint; defaulting to 112x112.", image_size_raw)
-        image_size = (112, 112)
+        LOGGER.warning("Invalid image_size %s in checkpoint; defaulting to 48x48.", image_size_raw)
+        image_size = DEFAULT_IMAGE_SIZE
 
     dummy = torch.randn(1, 3, image_size[0], image_size[1], device=device)
 
@@ -1664,8 +1665,8 @@ def build_parser() -> argparse.ArgumentParser:
     train_parser.add_argument(
         "--image_size",
         type=_parse_image_size_arg,
-        default=_parse_image_size_arg("40"),
-        help="Square size (e.g. 40) or HEIGHTxWIDTH (e.g. 40x32) for resizing input images.",
+        default=DEFAULT_IMAGE_SIZE,
+        help="Square size (e.g. 48) or HEIGHTxWIDTH (e.g. 64x48) for resizing input images.",
     )
     train_parser.add_argument("--train_ratio", type=float, default=0.8)
     train_parser.add_argument("--val_ratio", type=float, default=0.2)
