@@ -1093,6 +1093,10 @@ def find_body_for_phone_usage_target(target_box: Box, body_boxes: List[Box]) -> 
         key=lambda body_box: (body_box.cx - target_box.cx) ** 2 + (body_box.cy - target_box.cy) ** 2,
     )
 
+def phone_usage_target_priority(target_box: Box) -> Tuple[int, float]:
+    is_action = int(target_box.phone_class is not None and target_box.phone_class > 0)
+    return is_action, float(target_box.phone_confidence)
+
 def assign_phone_usage_to_bodies(target_boxes: List[Box], body_boxes: List[Box]) -> None:
     best_target_by_body_index: Dict[int, Box] = {}
 
@@ -1116,7 +1120,7 @@ def assign_phone_usage_to_bodies(target_boxes: List[Box], body_boxes: List[Box])
         if body_index is None:
             continue
         current_best = best_target_by_body_index.get(body_index)
-        if current_best is None or target_box.phone_confidence > current_best.phone_confidence:
+        if current_best is None or phone_usage_target_priority(target_box) > phone_usage_target_priority(current_best):
             best_target_by_body_index[body_index] = target_box
 
     for body_index, target_box in best_target_by_body_index.items():
