@@ -11,11 +11,13 @@ from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Iterable
 
+import matplotlib.pyplot as plt
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DATA_DIR = ROOT / "data"
 DEFAULT_OUTPUT_FILE = DEFAULT_DATA_DIR / "dataset.parquet"
+DEFAULT_CLASS_PIE_FILE = DEFAULT_DATA_DIR / "class_distribution.png"
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 LABEL_MAP = {
     0: "no_action",
@@ -44,6 +46,17 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--train-ratio", type=float, default=0.9, help="Target ratio for the training split.")
     parser.add_argument("--val-ratio", type=float, default=0.1, help="Target ratio for the validation split.")
     parser.add_argument("--seed", type=int, default=42, help="Seed controlling deterministic split assignment.")
+    parser.add_argument(
+        "--class-pie-file",
+        type=Path,
+        default=DEFAULT_CLASS_PIE_FILE,
+        help=f"PNG path for a class distribution pie chart generated from the parquet (default: {DEFAULT_CLASS_PIE_FILE})",
+    )
+    parser.add_argument(
+        "--pie-only",
+        action="store_true",
+        help="Only read the parquet specified by --output and write the class distribution pie chart.",
+    )
     parser.add_argument(
         "--no-embed-images",
         action="store_true",
@@ -211,9 +224,50 @@ def _summarize(df: pd.DataFrame) -> None:
             print(f"  {split:>5} {label:>16}: {split_label_counts.get((split, label), 0)}")
 
 
+def _load_parquet_class_counts(parquet_path: Path) -> Counter[int]:
+    if not parquet_path.exists():
+        raise FileNotFoundError(f"Dataset parquet not found: {parquet_path}")
+    df = pd.read_parquet(parquet_path, columns=["class_id"])
+    if df.empty:
+        return Counter()
+    return Counter(int(value) for value in df["class_id"].dropna())
+
+
+def save_class_distribution_pie_from_parquet(parquet_path: Path, output_path: Path) -> None:
+    counts = _load_parquet_class_counts(parquet_path)
+    if not counts:
+        print("[pie] No parquet rows available; skipping pie chart.")
+        return
+
+    labels = []
+    sizes = []
+    for class_id, count in sorted(counts.items()):
+        label = LABEL_MAP.get(class_id, str(class_id))
+        labels.append(f"{label} ({count})")
+        sizes.append(count)
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.pie(
+        sizes,
+        labels=labels,
+        autopct=lambda pct: f"{pct:.1f}%",
+        startangle=90,
+        counterclock=False,
+    )
+    ax.axis("equal")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[pie] Saved class distribution chart to {output_path}")
+
+
 def main() -> None:
     args = _parse_args()
     output = args.output
+    if args.pie_only:
+        save_class_distribution_pie_from_parquet(output, args.class_pie_file)
+        return
+
     if output.exists() and not args.overwrite:
         raise FileExistsError(f"{output} already exists; use --overwrite to replace it.")
 
@@ -221,6 +275,7 @@ def main() -> None:
     dataset_df.to_parquet(output, index=False)
     print(f"Wrote {output} ({len(dataset_df)} rows).")
     _summarize(dataset_df)
+    save_class_distribution_pie_from_parquet(output, args.class_pie_file)
 
 
 if __name__ == "__main__":
