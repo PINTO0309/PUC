@@ -12,13 +12,13 @@ https://github.com/user-attachments/assets/77b3a510-8c54-480a-a8f0-1e4c185cabd0
 
 |Variant|Size|F1|CPU<br>inference<br>latency|ONNX|
 |:-:|:-:|:-:|:-:|:-:|
-|P|115 KB|0.9628|0.13 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_p_32x24.onnx)|
-|N|176 KB|0.9754|0.24 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_n_32x24.onnx)|
-|T|280 KB|0.9923|0.31 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_t_32x24.onnx)|
-|S|495 KB|0.9975|0.35 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_s_32x24.onnx)|
-|C|876 KB|0.9979|0.47 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_c_32x24.onnx)|
-|M|1.7 MB|0.9985|0.55 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_m_32x24.onnx)|
-|L|6.4 MB|0.9986|0.73 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_l_32x24.onnx)|
+|P|115 KB|0.9160| ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_p_48x48.onnx)|
+|N|176 KB|0.9337| ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_n_48x48.onnx)|
+|T|280 KB|0.9468| ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_t_48x48.onnx)|
+|S|495 KB|0.9672| ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_s_48x48.onnx)|
+|C|876 KB|0.9722| ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_c_48x48.onnx)|
+|M|1.7 MB|0.9774| ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_m_48x48.onnx)|
+|L|6.4 MB|0.9944| ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_l_48x48.onnx)|
 
 ## Data sample
 
