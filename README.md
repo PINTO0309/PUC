@@ -10,15 +10,15 @@ Phone Usage Classifier (PUC) is a three-class image classification pipeline for 
 
   https://github.com/user-attachments/assets/56cb5147-78e7-4a9e-85ac-59db79b442c3
 
-|Variant|Size|F1|CPU<br>inference<br>latency|ONNX|
-|:-:|:-:|:-:|:-:|:-:|
-|P|115 KB|0.9160| 0.24 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_p_48x48.onnx)|
-|N|176 KB|0.9337| 0.39 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_n_48x48.onnx)|
-|T|280 KB|0.9468| 0.51 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_t_48x48.onnx)|
-|S|495 KB|0.9672| 0.66 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_s_48x48.onnx)|
-|C|876 KB|0.9722| 0.73 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_c_48x48.onnx)|
-|M|1.7 MB|0.9774| 0.86 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_m_48x48.onnx)|
-|L|6.4 MB|0.9944| 1.07 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_l_48x48.onnx)|
+  |Variant|Size|F1|CPU<br>inference<br>latency|ONNX|
+  |:-:|:-:|:-:|:-:|:-:|
+  |P|115 KB|0.9160| 0.24 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_p_48x48.onnx)|
+  |N|176 KB|0.9337| 0.39 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_n_48x48.onnx)|
+  |T|280 KB|0.9468| 0.51 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_t_48x48.onnx)|
+  |S|495 KB|0.9672| 0.66 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_s_48x48.onnx)|
+  |C|876 KB|0.9722| 0.73 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_c_48x48.onnx)|
+  |M|1.7 MB|0.9774| 0.86 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_m_48x48.onnx)|
+  |L|6.4 MB|0.9944| 1.07 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_l_48x48.onnx)|
 
 ## Data sample
 
