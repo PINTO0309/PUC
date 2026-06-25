@@ -37,8 +37,8 @@ BOX_COLORS = [
 
 PHONE_USAGE_LABELS = {
     0: "no_action",
-    1: "point",
-    2: "point_somewhere",
+    1: "point_somewhere",
+    2: "point",
 }
 PHONE_USAGE_COLORS = {
     1: (0, 220, 60),        # vivid green

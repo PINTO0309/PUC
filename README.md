@@ -6,8 +6,8 @@ Phone Usage Classifier (PUC) is a three-class image classification pipeline for 
 interact with smartphones. **Perhaps the model is looking at our `hands`, not our `smartphones`. This model is a complete failure, but it shows how humans fail to look at the small details when making judgments.**
 
 - `classid=0` (`no_action`): No interaction with a smartphone.
-- `classid=1` (`point`): Pointing the smartphone towards the camera.
-- `classid=2` (`point_somewhere`): Pointing the smartphone somewhere other than the camera.
+- `classid=1` (`point_somewhere`): Pointing the smartphone somewhere other than the camera.
+- `classid=2` (`point`): Pointing the smartphone towards the camera.
 
 https://github.com/user-attachments/assets/18acf290-63b6-40ba-a38c-a5712dedc19c
 
@@ -25,7 +25,7 @@ https://github.com/user-attachments/assets/18acf290-63b6-40ba-a38c-a5712dedc19c
 
 |1|2|3|4|
 |:-:|:-:|:-:|:-:|
-|<img width="24" height="32" alt="000000084193_022002_0" src="https://github.com/user-attachments/assets/9e661b3d-f5ee-4a4a-bcee-8d28d6ac020a" />|<img width="24" height="32" alt="no_action1_004005_0" src="https://github.com/user-attachments/assets/5e26aa1d-f849-47d2-ae73-88ec2c4bedd9" />|<img width="24" height="32" alt="point1_001301_1" src="https://github.com/user-attachments/assets/fe84a427-8d86-45f1-b77e-e4d6778b1a23" />|<img width="24" height="32" alt="point_somewhere4_000156_2" src="https://github.com/user-attachments/assets/3682f7e5-26a0-4e70-a38b-93c60c3f5a31" />|
+|<img width="24" height="32" alt="000000084193_022002_0" src="https://github.com/user-attachments/assets/9e661b3d-f5ee-4a4a-bcee-8d28d6ac020a" />|<img width="24" height="32" alt="no_action1_004005_0" src="https://github.com/user-attachments/assets/5e26aa1d-f849-47d2-ae73-88ec2c4bedd9" />|<img width="24" height="32" alt="point1_001301_2" src="https://github.com/user-attachments/assets/fe84a427-8d86-45f1-b77e-e4d6778b1a23" />|<img width="24" height="32" alt="point_somewhere4_000156_1" src="https://github.com/user-attachments/assets/3682f7e5-26a0-4e70-a38b-93c60c3f5a31" />|
 
 ## Setup
 
@@ -61,24 +61,24 @@ uv run python 01_data_prep_realdata.py \
 --start-folder 1001 \
 --allow-multi-body
 
-uv run python 02_make_parquet.py --embed-images
+uv run python 02_make_parquet.py --overwrite
 ```
 ```
 Split counts:
-  train: 51240
-    val: 12818
+  train: 23988
+    val: 2667
 Label counts:
-         no_action: 42909
-             point: 11545
-   point_somewhere: 9604
+         no_action: 8885
+   point_somewhere: 8885
+             point: 8885
 ```
 
 <img width="673" height="482" alt="class_distribution" src="https://github.com/user-attachments/assets/60d8e828-f2ff-49f2-aa41-6d611e29cb2a" />
 
 ## Training Pipeline
 
-- Use the images located under `dataset/output/002_xxxx_front_yyyyyy` together with their annotations in `dataset/output/002_xxxx_front.csv`.
-- Every augmented image that originates from the same `still_image` stays in the same split to prevent leakage.
+- Use the labeled image folders under `data/no_action`, `data/point_somewhere`, and `data/point`.
+- `02_make_parquet.py` writes pre-defined train/val splits into `data/dataset.parquet` using an image-level 9:1 split per class.
 - The training loop relies on `BCEWithLogitsLoss` plus class-balanced `pos_weight` to stabilise optimisation under class imbalance; inference produces sigmoid probabilities. Use `--train_resampling weighted` to switch on the previous `WeightedRandomSampler` behaviour, or `--train_resampling balanced` to physically duplicate minority classes before shuffling.
 - Training history, validation metrics, optional test predictions, checkpoints, configuration JSON, and ONNX exports are produced automatically.
 - Per-epoch checkpoints named like `puc_epoch_0001.pt` are retained (latest 10), as well as the best checkpoints named `puc_best_epoch0004_f1_0.9321.pt` (also latest 10).
@@ -88,7 +88,7 @@ Label counts:
   |------------------|-----------------------------|---------------------------|------|
   | `baseline`       | `avg`                       | `avg`, `avgmax_mlp`       | When using `transformer`/`mlp_mixer`, you need to adjust the height and width of the feature map so that they are divisible by `--token_mixer_grid` (if left as is, an exception will occur during ONNX conversion or inference). |
   | `inverted_se`    | `avgmax_mlp`                | `avg`, `avgmax_mlp`       | When using `transformer`/`mlp_mixer`, it is necessary to adjust `--token_mixer_grid` as above. |
-  | `convnext`       | `transformer`               | `avg`, `avgmax_mlp`, `transformer`, `mlp_mixer` | For both heads, the grid must be divisible by the feature map (default `3x2` fits with 30x48 input). |
+  | `convnext`       | `transformer`               | `avg`, `avgmax_mlp`, `transformer`, `mlp_mixer` | For token mixer heads, the feature map dimensions must be divisible by `--token_mixer_grid` (default `2x3`). |
 - The classification head is selected with `--head_variant` (`avg`, `avgmax_mlp`, `transformer`, `mlp_mixer`, or `auto` which derives a sensible default from the backbone).
 - Pass `--rgb_to_yuv_to_y` to convert RGB crops to YUV, keep only the Y (luma) channel inside the network, and train a single-channel stem without modifying the dataloader.
 - Alternatively, use `--rgb_to_lab` or `--rgb_to_luv` to convert inputs to CIE Lab/Luv (3-channel) before the stem; these options are mutually exclusive with each other and with `--rgb_to_yuv_to_y`.
@@ -99,7 +99,7 @@ Label counts:
 Baseline depthwise-separable CNN:
 
 ```bash
-SIZE=32x24
+SIZE=48x48
 uv run python -m puc train \
 --data_root data/dataset.parquet \
 --output_dir runs/puc_${SIZE} \
@@ -118,7 +118,7 @@ uv run python -m puc train \
 Inverted residual + SE variant (recommended for higher capacity):
 
 ```bash
-SIZE=32x24
+SIZE=48x48
 VAR=s
 uv run python -m puc train \
 --data_root data/dataset.parquet \
@@ -140,7 +140,7 @@ uv run python -m puc train \
 ConvNeXt-style backbone with transformer head over pooled tokens:
 
 ```bash
-SIZE=32x24
+SIZE=48x48
 uv run python -m puc train \
 --data_root data/dataset.parquet \
 --output_dir runs/puc_convnext_${SIZE} \
@@ -171,8 +171,8 @@ uv run python -m puc train \
 
 ```bash
 uv run python -m puc exportonnx \
---checkpoint runs/puc_is_s_32x24/puc_best_epoch0049_f1_0.9939.pt \
---output puc_s_32x24.onnx \
+--checkpoint runs/puc_is_s_48x48/puc_best_epoch0049_f1_0.9939.pt \
+--output puc_s_48x48.onnx \
 --opset 17
 ```
 
@@ -227,4 +227,3 @@ interact with smartphones.},
   }
   ```
 - https://github.com/PINTO0309/bbalg: MIT License
-
