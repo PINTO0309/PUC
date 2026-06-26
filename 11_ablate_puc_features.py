@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Estimate feature importance for sc_c_32x24.onnx by ablating intermediate tensors."""
+"""Estimate feature importance for PUC ONNX models by ablating intermediate tensors."""
 
 from __future__ import annotations
 
@@ -18,6 +18,23 @@ import onnx  # noqa: E402
 import onnxruntime as ort  # noqa: E402
 from onnx import TensorProto, helper, shape_inference  # noqa: E402
 from PIL import Image  # noqa: E402
+
+CLASS_LABELS = {
+    0: "no_action",
+    1: "point_somewhere",
+    2: "point",
+}
+TARGET_CLASS_ALIASES = {
+    "no_action": (0,),
+    "none": (0,),
+    "point_somewhere": (1,),
+    "somewhere": (1,),
+    "point": (2,),
+    "pointing": (2,),
+    "phone_usage": (1, 2),
+    "usage": (1, 2),
+    "active": (1, 2),
+}
 
 
 @dataclass(frozen=True)
@@ -68,6 +85,12 @@ class GateStats:
     delta: RunningStats = field(default_factory=RunningStats)
 
 
+@dataclass(frozen=True)
+class TargetScoreSpec:
+    indices: Tuple[int, ...]
+    label: str
+
+
 def _gather_image_paths(image: str | None, image_dir: str | None, max_images: int) -> List[Path]:
     if image and image_dir:
         raise ValueError("Use either --image or --image-dir, not both.")
@@ -91,9 +114,9 @@ def _gather_image_paths(image: str | None, image_dir: str | None, max_images: in
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Insert scalar gates after selected ONNX tensors and measure prob_sitting drops when zeroed."
+        description="Insert scalar gates after selected ONNX tensors and measure target PUC probability drops when zeroed."
     )
-    parser.add_argument("--model", default="sc_c_32x24.onnx", help="Path to ONNX model.")
+    parser.add_argument("--model", default="puc_s_48x48.onnx", help="Path to ONNX model.")
     parser.add_argument("--image", help="Path to a single RGB image.")
     parser.add_argument(
         "--image-dir",
@@ -103,8 +126,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input-size",
         type=_parse_input_size,
-        default=(32, 24),
-        help="Input size as HxW (e.g. 32x24). Single integers apply to both height and width.",
+        default=(48, 48),
+        help="Input size as HxW (e.g. 48x48). Single integers apply to both height and width.",
     )
     parser.add_argument(
         "--mean",
@@ -123,6 +146,19 @@ def _parse_args() -> argparse.Namespace:
         help="Per-channel normalization std in [0,1].",
     )
     parser.add_argument("--providers", nargs="*", help="Optional ONNX Runtime providers override.")
+    parser.add_argument(
+        "--output-name",
+        help="Model output to score. Defaults to the last graph output, usually 'probabilities'.",
+    )
+    parser.add_argument(
+        "--target-class",
+        type=_parse_target_score,
+        default="phone_usage",
+        help=(
+            "Class probability to score: no_action, point_somewhere, point, phone_usage/usage/active "
+            "(class 1+2), a numeric class index, or comma-separated indices. Default: phone_usage."
+        ),
+    )
     parser.add_argument("--limit", type=int, help="Maximum number of tensors to gate.")
     parser.add_argument("--name-contains", nargs="*", help="Select tensors whose node or tensor name contains any term.")
     parser.add_argument("--op-type", nargs="*", help="Select tensors produced by these operator types.")
@@ -155,13 +191,39 @@ def _parse_args() -> argparse.Namespace:
         default="ablation_top_features.png",
         help="Filename for the stitched 3x2 PNG generated from the top-K heatmaps.",
     )
-    default_heatmap_script = Path(__file__).with_name("10_visualize_sc_heatmaps.py")
+    default_heatmap_script = Path(__file__).with_name("10_visualize_puc_heatmaps.py")
     parser.add_argument(
         "--heatmap-script",
         default=str(default_heatmap_script),
-        help="Path to 10_visualize_sc_heatmaps.py used for auto-rendering top-K heatmaps.",
+        help="Path to 10_visualize_puc_heatmaps.py used for auto-rendering top-K heatmaps.",
     )
     return parser.parse_args()
+
+
+def _parse_target_score(value: str) -> TargetScoreSpec:
+    text = str(value).strip().lower()
+    if not text:
+        raise argparse.ArgumentTypeError("--target-class cannot be empty.")
+    normalized = text.replace("-", "_").replace(" ", "_")
+    if normalized in TARGET_CLASS_ALIASES:
+        indices = TARGET_CLASS_ALIASES[normalized]
+    else:
+        parts = [part.strip() for part in normalized.split(",") if part.strip()]
+        if not parts:
+            raise argparse.ArgumentTypeError("--target-class cannot be empty.")
+        try:
+            indices = tuple(int(part) for part in parts)
+        except ValueError as exc:
+            valid = ", ".join(sorted(TARGET_CLASS_ALIASES))
+            raise argparse.ArgumentTypeError(f"Unknown target class {value!r}. Valid aliases: {valid}.") from exc
+    if any(index < 0 for index in indices):
+        raise argparse.ArgumentTypeError("Class indices must be non-negative.")
+    if len(indices) == 1:
+        label = CLASS_LABELS.get(indices[0], f"class_{indices[0]}")
+    else:
+        known = [CLASS_LABELS.get(index, f"class_{index}") for index in indices]
+        label = "phone_usage" if indices == (1, 2) else "+".join(known)
+    return TargetScoreSpec(indices=indices, label=label)
 
 
 def _load_model(path: Path) -> onnx.ModelProto:
@@ -396,9 +458,42 @@ def _build_session(model: onnx.ModelProto, providers: Sequence[str]) -> ort.Infe
     return ort.InferenceSession(model.SerializeToString(), sess_options=opts, providers=list(providers))
 
 
-def _run_prob(session: ort.InferenceSession, feeds: Dict[str, np.ndarray], output_name: str) -> float:
-    prob = session.run([output_name], feeds)[0].squeeze()
-    return float(prob)
+def _format_input_size(input_size: Tuple[int, int]) -> str:
+    height, width = input_size
+    return f"{height}x{width}"
+
+
+def _run_target_score(
+    session: ort.InferenceSession,
+    feeds: Dict[str, np.ndarray],
+    output_name: str,
+    target: TargetScoreSpec,
+) -> float:
+    probs = np.asarray(session.run([output_name], feeds)[0])
+    squeezed = np.squeeze(probs)
+    if squeezed.ndim == 0:
+        if target.indices not in ((0,),):
+            raise ValueError(
+                f"Output {output_name!r} is scalar, but --target-class {target.label!r} expects class indices "
+                f"{target.indices}."
+            )
+        return float(squeezed)
+    if squeezed.ndim == 1:
+        class_probs = squeezed
+    elif squeezed.ndim == 2:
+        if squeezed.shape[0] != 1:
+            raise ValueError(f"Expected batch size 1 for output {output_name!r}, got shape {probs.shape}.")
+        class_probs = squeezed[0]
+    else:
+        raise ValueError(f"Unsupported output shape for {output_name!r}: {probs.shape}")
+
+    max_index = max(target.indices)
+    if max_index >= class_probs.shape[0]:
+        raise ValueError(
+            f"--target-class {target.label!r} references index {max_index}, but output {output_name!r} "
+            f"has only {class_probs.shape[0]} classes."
+        )
+    return float(np.sum(class_probs[list(target.indices)]))
 
 
 def _render_topk_heatmaps(
@@ -408,6 +503,10 @@ def _render_topk_heatmaps(
     tensor_names: Sequence[str],
     output_dir: Path,
     composite_name: str,
+    input_size: Tuple[int, int],
+    mean: Sequence[float],
+    std: Sequence[float],
+    providers: Sequence[str],
 ) -> None:
     if not tensor_names:
         print("[WARN] No tensor names provided for heatmap rendering.")
@@ -440,7 +539,15 @@ def _render_topk_heatmaps(
         "order",
         "--composite-layout",
         "col",
+        "--input-size",
+        _format_input_size(input_size),
+        "--mean",
+        *(str(v) for v in mean),
+        "--std",
+        *(str(v) for v in std),
     ]
+    if providers:
+        cmd.extend(["--providers", *providers])
     cmd.extend(["--layers", *lowered_layers])
     print(f"[INFO] Rendering heatmaps for top-{len(lowered_layers)} tensors -> {output_dir}/{composite_name}")
     sys.stdout.flush()
@@ -454,6 +561,7 @@ def main() -> None:
     args = _parse_args()
     model_path = Path(args.model)
     base_model = _load_model(model_path)
+    target_score = args.target_class
     targets = _collect_targets(base_model)
     selected = _filter_targets(targets, args.name_contains, args.op_type, args.regex, args.include_all, args.limit)
 
@@ -486,24 +594,27 @@ def main() -> None:
     num_images = len(image_paths)
     multi_mode = num_images > 1
 
-    output_name = base_model.graph.output[-1].name
+    output_name = args.output_name or base_model.graph.output[-1].name
+    available_outputs = {output.name for output in session.get_outputs()}
+    if output_name not in available_outputs:
+        raise ValueError(f"Output {output_name!r} not found. Available outputs: {sorted(available_outputs)}")
     for idx, image_path in enumerate(image_paths, start=1):
         image_arr = _load_image(Path(image_path), args.input_size)
         input_tensor = _prepare_tensor(image_arr, args.mean, args.std)
         feeds: Dict[str, np.ndarray] = dict(gate_defaults)
         feeds[input_name] = input_tensor
 
-        baseline = _run_prob(session, feeds, output_name)
+        baseline = _run_target_score(session, feeds, output_name, target_score)
         baseline_stats.update(baseline)
         if multi_mode:
-            print(f"[IMAGE {idx:04d}] {image_path}: baseline={baseline:.4f}")
+            print(f"[IMAGE {idx:04d}] {image_path}: baseline_{target_score.label}={baseline:.4f}")
         else:
-            print(f"[BASELINE] prob_sitting={baseline:.4f} with {len(gate_specs)} gates active.")
+            print(f"[BASELINE] prob_{target_score.label}={baseline:.4f} with {len(gate_specs)} gates active.")
 
         for spec in gate_specs:
             ablate_feeds = dict(feeds)
             ablate_feeds[spec.gate_name] = gate_zero
-            prob = _run_prob(session, ablate_feeds, output_name)
+            prob = _run_target_score(session, ablate_feeds, output_name, target_score)
             delta = baseline - prob
             stats = tensor_to_stats[spec.tensor_name]
             stats.prob.update(prob)
@@ -520,7 +631,7 @@ def main() -> None:
 
     if multi_mode:
         print(
-            f"\nProcessed {num_images} images. Baseline prob: mean={baseline_stats.mean():.4f} "
+            f"\nProcessed {num_images} images. Baseline prob_{target_score.label}: mean={baseline_stats.mean():.4f} "
             f"std={baseline_stats.std():.4f} min={baseline_stats.min_val:.4f} max={baseline_stats.max_val:.4f}"
         )
         print("\nAggregate feature impact (sorted by mean Δ):")
@@ -556,6 +667,10 @@ def main() -> None:
             tensor_names,
             output_dir,
             args.topk_composite_name,
+            args.input_size,
+            args.mean,
+            args.std,
+            providers,
         )
 
 

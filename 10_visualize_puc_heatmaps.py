@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export Sigmoid->Mul feature maps from sc_c_32x24.onnx as heatmap PNG images."""
+"""Export Sigmoid->Mul feature maps from PUC ONNX models as heatmap PNG images."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from onnx import helper, shape_inference  # noqa: E402
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 PNG_SCALE = 0.3  # final PNG dimensions will be scaled by this factor
+CLASS_LABELS = ("no_action", "point_somewhere", "point")
 
 
 @dataclass(frozen=True)
@@ -38,10 +39,10 @@ class FeatureTap:
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Run sc_c_32x24.onnx, capture Conv->Sigmoid->Mul feature maps, and save them as heatmap PNGs."
+            "Run a PUC ONNX model, capture Sigmoid->Mul feature maps, and save them as heatmap PNGs."
         )
     )
-    parser.add_argument("--model", default="sc_c_32x24.onnx", help="Path to the ONNX model to inspect.")
+    parser.add_argument("--model", default="puc_s_48x48.onnx", help="Path to the ONNX model to inspect.")
     parser.add_argument("--image", help="Path to the RGB image used as model input.")
     parser.add_argument("--output-dir", default="feature_heatmaps", help="Directory where PNGs will be stored.")
     parser.add_argument("--layers", nargs="*", help="Optional substrings to filter which feature maps are exported.")
@@ -55,8 +56,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input-size",
         type=_parse_input_size,
-        default=(32, 24),
-        help="Input size as HxW (e.g. 32x24). Single integers apply to both height and width.",
+        default=(48, 48),
+        help="Input size as HxW (e.g. 48x48). Single integers apply to both height and width.",
     )
     parser.add_argument(
         "--mean",
@@ -539,8 +540,15 @@ def main() -> None:
 
     # Run the main model output for reference.
     final_output_name = base_model.graph.output[-1].name
-    prob = session.run([final_output_name], feeds)[0]
-    print(f"Model prob_sitting={prob.squeeze():.4f}")
+    prob = np.asarray(session.run([final_output_name], feeds)[0]).squeeze()
+    if prob.ndim == 0:
+        print(f"Model {final_output_name}={float(prob):.4f}")
+    else:
+        parts = []
+        for idx, value in enumerate(prob.reshape(-1)):
+            label = CLASS_LABELS[idx] if idx < len(CLASS_LABELS) else f"class_{idx}"
+            parts.append(f"prob_{label}={float(value):.4f}")
+        print("Model " + " ".join(parts))
 
     if args.composite_topk > 0 and intensity_records:
         _create_composite(
