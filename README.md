@@ -64,15 +64,15 @@ uv run python 02_make_parquet.py --overwrite
 ```
 ```
 Split counts:
-  train: 23988
-    val: 2667
+  train: 27174
+    val: 3021
 Label counts:
-         no_action: 8885
+         no_action: 12425
    point_somewhere: 8885
              point: 8885
 ```
 
-<img width="600" alt="class_distribution" src="https://github.com/user-attachments/assets/35622164-f354-4491-9847-d7d54f1a5e42" />
+<img width="600"alt="class_distribution" src="https://github.com/user-attachments/assets/ce172a47-77e5-4464-9b82-72d120563b6e" />
 
 ## Training Pipeline
 
