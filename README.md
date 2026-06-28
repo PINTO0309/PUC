@@ -72,7 +72,7 @@ Label counts:
              point: 8885
 ```
 
-<img width="600"alt="class_distribution" src="https://github.com/user-attachments/assets/ce172a47-77e5-4464-9b82-72d120563b6e" />
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/dbfb5e89-8678-49e5-a821-11e9b0ecbc37" />
 
 ## Training Pipeline
 
