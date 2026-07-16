@@ -10,6 +10,10 @@ Phone Usage Classifier (PUC) is a three-class image classification pipeline for 
 
   https://github.com/user-attachments/assets/56cb5147-78e7-4a9e-85ac-59db79b442c3
 
+- Advanced Applications - Estimating whether or not the user is looking at their smartphone
+
+  https://github.com/user-attachments/assets/e69f5f17-396b-466f-8fad-890ff215ef8c
+
   |Variant|Size|F1|CPU<br>inference<br>latency|ONNX|
   |:-:|:-:|:-:|:-:|:-:|
   |P|115 KB|0.9160| 0.24 ms|[Download](https://github.com/PINTO0309/PUC/releases/download/onnx/puc_p_48x48.onnx)|
