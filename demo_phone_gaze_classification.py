@@ -52,7 +52,7 @@ DEFAULT_GAZELLE_MODEL = 'gazelle_hgnetv2_pico_inout_distill_1x3x640x640_1xNx4.on
 DEFAULT_GAZE_HAND_OVERLAP_RATIO = 0.8
 DEFAULT_GAZE_HEATMAP_ALPHA = 0.35
 GAZE_INOUT_THRESHOLD = 0.5
-GAZE_REGION_EXPANSION_FROM_PUC_CROP = 1.5
+GAZE_HAND_BOX_EXPANSION = 2.5
 PHONE_CHECK_LABEL = 'Check the phone'
 PHONE_CHECK_COLOR = (0, 0, 255)
 
@@ -1764,7 +1764,7 @@ def main():
         type=check_unit_interval,
         default=DEFAULT_GAZE_HAND_OVERLAP_RATIO,
         help=(
-            'Required ratio of the peak response inside the 1.5x PUC Hand crop region to the global '
+            'Required ratio of the peak response inside the 1.5x original Hand box region to the global '
             f'heatmap peak. Default: {DEFAULT_GAZE_HAND_OVERLAP_RATIO}'
         ),
     )
@@ -2214,10 +2214,7 @@ def main():
                             frame_height=debug_image_h,
                             frame_width=debug_image_w,
                             overlap_ratio=gaze_hand_overlap_ratio,
-                            expansion=(
-                                phone_usage_crop_expansion
-                                * GAZE_REGION_EXPANSION_FROM_PUC_CROP
-                            ),
+                            expansion=GAZE_HAND_BOX_EXPANSION,
                         )
                         for hand_box in positive_hands_by_body.get(body_index, [])
                     )
